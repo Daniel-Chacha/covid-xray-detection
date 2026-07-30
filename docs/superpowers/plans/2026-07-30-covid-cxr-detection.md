@@ -1692,12 +1692,21 @@ def test_base_is_frozen_immediately_after_build(model):
 
 
 def test_stage_b_unfreezes_from_the_named_block(model):
+    """Asserts the freeze boundary, not specific layer names.
+
+    Keras 3 renamed DenseNet's early layers (conv1/conv -> conv1_conv) because
+    slashes are no longer permitted. Pinning a name here would break on the
+    next such change while telling us nothing about whether the cutoff works.
+    """
     count = set_finetune_trainable(model, "conv5_block1")
     base = get_base_model(model)
+    names = [layer.name for layer in base.layers]
+    cutoff = next(i for i, name in enumerate(names) if name.startswith("conv5_block1"))
 
     assert count > 0
-    assert base.get_layer("conv1/conv").trainable is False
-    assert base.get_layer("conv5_block16_concat") is not None
+    assert not any(layer.trainable for layer in base.layers[:cutoff])
+    # Not *all* of the tail: BatchNorm stays frozen throughout.
+    assert any(layer.trainable for layer in base.layers[cutoff:])
 
 
 def test_batchnorm_stays_frozen_after_unfreezing(model):
@@ -2165,6 +2174,9 @@ def train_two_stage(
         validation_data=val_ds,
         epochs=cfg.stage_a_epochs,
         callbacks=build_callbacks(cfg, output_dir, stage="a"),
+        # Shuffling is the dataset's job (see data.py); saying so silences
+        # Keras's warning that it is ignoring this argument.
+        shuffle=False,
         verbose=1,
     )
 
@@ -2183,6 +2195,7 @@ def train_two_stage(
         validation_data=val_ds,
         epochs=cfg.stage_b_epochs,
         callbacks=build_callbacks(cfg, output_dir, stage="b"),
+        shuffle=False,
         verbose=1,
     )
 
