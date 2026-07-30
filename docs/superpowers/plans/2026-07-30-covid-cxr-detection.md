@@ -6,7 +6,7 @@
 
 **Architecture:** A thin `src/covid_xray/` package holds all logic — de-duplication, split manifests, the `tf.data` input pipeline with four input variants, model builders, a two-stage training loop, the metric suite, and Grad-CAM. Four notebooks orchestrate: EDA/dedup/split, training, evaluation, and the confound audit. Every experiment is one YAML config against the same code path, so the raw baseline, the lung-masked model, and the two shortcut probes differ only by an `variant` string.
 
-**Tech Stack:** Python 3.11+, TensorFlow/Keras 3, scikit-learn, ImageHash, Pillow, pandas, matplotlib, pytest. Training on Colab GPU; EDA, de-duplication and analysis on the local CPU machine.
+**Tech Stack:** Python 3.11+, TensorFlow/Keras 3, scikit-learn, ImageHash, Pillow, pandas, matplotlib, pytest. Training on Kaggle GPUs; data preparation, modules and tests on the local CPU machine.
 
 **Spec:** [2026-07-30-covid-cxr-detection-design.md](../specs/2026-07-30-covid-cxr-detection-design.md)
 
@@ -32,97 +32,81 @@ Every task's requirements implicitly include this section.
 
 ## Execution Environment
 
-**Everything runs in the Colab web UI.** There is no local execution step. The
-repository lives in Google Drive so it survives session death; the dataset
-lives on the VM's local disk because reading 21k files from mounted Drive is
-roughly an order of magnitude slower and would bottleneck every epoch.
+Two places, split by one rule: **only Tasks 9, 11 and 13 need a GPU.**
+Everything else — all 63 unit tests, and the whole data-preparation pass —
+runs locally on CPU.
 
-### The bootstrap cell
+| Tasks | Where | Notes |
+|---|---|---|
+| **1–8, 10, 12** | Local, CPU | Every module and its test suite. `test_models.py` does a 64x64 forward pass; `test_train.py` fits one epoch on 16 synthetic 32x32 images. Both trivial without a GPU. |
+| **4** | Local, CPU | Needs the dataset on disk (~800 MB) but no GPU. The hash scan over 21k images takes 5–10 minutes and peaks near 200 MB of RAM. Producing the split manifests locally means committing them directly, with no artefact-retrieval step. |
+| **9, 11, 13** | **Kaggle Notebooks**, GPU | Training (~6 hrs total), test-set evaluation, and the Grad-CAM audit. |
 
-First cell of **every** notebook, verbatim. Nothing else works until this runs.
+**GitHub is the bridge.** The Kaggle kernel runs on Kaggle's VM and cannot see
+local files — only cell *text* crosses the wire. Notebooks therefore clone the
+repo. This also matters for background execution, where your machine is not
+involved at all.
+
+### Why Kaggle rather than Colab for the GPU tasks
+
+- The dataset **is** a Kaggle dataset: attach it and it mounts read-only at
+  `/kaggle/input/covid19-radiography-database/`. No download, no API token, no
+  re-fetch after a session dies.
+- A visible **30 GPU-hrs/week** quota, versus Colab's undisclosed allocation.
+- **Background execution** — "Save & Run All" runs the notebook headless, so a
+  2 hr training run does not depend on a browser tab staying open. Colab free
+  kills idle sessions after ~90 minutes.
+- **20 GB persistent output**, attachable as a data source to the next
+  notebook. This is how Task 9's checkpoints reach Task 11.
+
+**Choose T4, not P100.** P100 is Pascal and has no tensor cores, so the
+`mixed_float16` policy in `train.py` buys almost nothing there. T4 is Turing
+and roughly doubles throughput under mixed precision, despite worse FP32
+paper specs.
+
+### Kaggle prerequisites
+
+1. **Phone-verify the account** to enable notebook internet. Required for
+   `git clone` and for DenseNet121's ImageNet weights.
+2. **Attach the dataset** via *+ Add Input* → search `covid19-radiography-database`.
+3. **Add a GitHub token** under *Add-ons → Secrets* as `GITHUB_TOKEN` if you
+   want notebooks to push results back. Optional — results can also be
+   downloaded from the notebook output panel and committed locally.
+
+### Kaggle bootstrap cell
+
+First cell of notebooks 02, 03 and 04:
 
 ```python
-# --- bootstrap: run first in every notebook ---------------------------------
-from google.colab import drive
-drive.mount('/content/drive')
-
-!pip install -q ImageHash pyyaml pytest
-# Do NOT pip install tensorflow — Colab's is preinstalled and matched to CUDA.
-
 import os, sys
 from pathlib import Path
 
-REPO_ROOT = Path('/content/drive/MyDrive/covid-xray-detection')
-DATA_ROOT = Path('/content/data/COVID-19_Radiography_Dataset')
-CKPT_ROOT = REPO_ROOT / 'checkpoints'
+REPO_URL  = 'https://github.com/Daniel-Chacha/covid-xray-detection.git'
+REPO_ROOT = Path('/kaggle/working/covid-xray-detection')
+DATA_ROOT = Path('/kaggle/input/covid19-radiography-database/COVID-19_Radiography_Dataset')
 
-for directory in (REPO_ROOT / 'src' / 'covid_xray', REPO_ROOT / 'tests',
-                  REPO_ROOT / 'configs', REPO_ROOT / 'data' / 'splits',
-                  REPO_ROOT / 'notebooks', REPO_ROOT / 'reports' / 'figures',
-                  CKPT_ROOT):
-    directory.mkdir(parents=True, exist_ok=True)
+!pip install -q ImageHash
+if (REPO_ROOT / '.git').exists():
+    !git -C {REPO_ROOT} pull -q
+else:
+    !git clone -q {REPO_URL} {REPO_ROOT}
 
-%cd {REPO_ROOT}
 sys.path.insert(0, str(REPO_ROOT / 'src'))
-
-# Required: %%writefile overwrites modules mid-session, and without autoreload
-# Python keeps serving the stale import from cache.
 %load_ext autoreload
 %autoreload 2
 
-print('repo:', REPO_ROOT)
+# Print the commit being run. A stale clone is the standard failure of this
+# workflow — edit locally, forget to push, silently run yesterday's code.
+!git -C {REPO_ROOT} log -1 --format='running commit %h  %s  (%cr)'
+assert DATA_ROOT.exists(), 'dataset not attached — use "+ Add Input"'
 ```
-
-`%cd` is the magic, not `!cd` — a shell `cd` dies with its subprocess and
-`pytest` would then run from `/content` and find nothing.
-
-### Two conventions applied to every task below
-
-The task bodies specify file contents and shell commands in ordinary form.
-Translate them mechanically:
-
-**1. Creating a file.** Every `**Files:** Create: <path>` step becomes a
-`%%writefile` cell — the magic must be the very first line, with an absolute
-path:
-
-````
-%%writefile /content/drive/MyDrive/covid-xray-detection/src/covid_xray/config.py
-"""Run configuration.
-...
-````
-
-**2. Running a command.** Every `Run: pytest ...` becomes `!pytest ...` in a
-code cell. The bootstrap already `%cd`-ed to the repo root, so relative paths
-in the plan work unchanged.
 
 ### Session-death checklist
 
-Colab recycles VMs without warning. On reconnect:
-
-1. Re-run the bootstrap cell — Drive unmounts and `sys.path` resets.
-2. Re-run the dataset download cell (Task 4 Step 1) — `/content` is wiped, Drive is not.
-3. Source files, split manifests and checkpoints are all in Drive and survive.
-
-Training uses the `BackupAndRestore` callback, so a killed run resumes from the
-last completed epoch rather than from zero.
-
-### Git
-
-Optional but recommended — the repo in Drive can be a real git repo, and
-committing from Colab is how the portfolio history gets built:
-
-```python
-!git -C {REPO_ROOT} init -q 2>/dev/null
-!git -C {REPO_ROOT} config user.name  "Your Name"
-!git -C {REPO_ROOT} config user.email "you@example.com"
-```
-
-Every task's commit step then runs as `!git -C {REPO_ROOT} add ...` and
-`!git -C {REPO_ROOT} commit -m "..."`. Pushing to GitHub needs a fine-grained
-personal access token embedded in the remote URL. The `.keras` checkpoints are
-~90 MB each and stay gitignored — they live in Drive, never in git.
-
----
+Kaggle recycles VMs. On reconnect: re-run the bootstrap (it re-clones into a
+fresh `/kaggle/working`), and re-attach inputs if they were dropped. The
+dataset at `/kaggle/input` is always there. Training uses `BackupAndRestore`,
+so a killed run resumes from the last completed epoch.
 
 ## File Structure
 
@@ -157,8 +141,8 @@ notebooks/01_eda_and_dedup, 02_train, 03_evaluate, 04_gradcam_audit
 
 ## Task 1: Package scaffold, config, and test fixtures
 
-> Run the bootstrap cell first. Every "Create" step below is a `%%writefile`
-> cell; every `pytest` command is `!pytest`.
+> **Local, CPU.** Plain files in the repo; run tests with `python -m pytest`
+> from an activated virtualenv.
 
 **Files:**
 - Create: `requirements.txt`, `src/covid_xray/__init__.py`, `src/covid_xray/config.py`, `tests/conftest.py`, `tests/test_config.py`, `pytest.ini`
@@ -183,9 +167,9 @@ tqdm>=4.66
 ImageHash>=4.3
 
 # Deep learning (Tasks 5-13).
-# Colab already provides TensorFlow — do NOT pip install it there, it will
-# break the preinstalled CUDA stack. Install locally only if you want to run
-# the TF-dependent tests on CPU.
+# Kaggle already provides TensorFlow — do NOT pip install it there, it will
+# break the preinstalled CUDA stack. Install locally to run the TF-dependent
+# tests on CPU.
 tensorflow>=2.19
 keras>=3.4
 
@@ -310,7 +294,7 @@ VARIANTS: tuple[str, ...] = ("raw", "masked", "lungs_removed", "downsample8")
 MODELS: tuple[str, ...] = ("densenet121", "logreg8")
 
 # Environment variable holding the dataset root, so the same manifest CSVs
-# work unchanged on the local machine and on Colab.
+# work unchanged on the local machine and on Kaggle.
 DATA_ROOT_ENV = "COVID_XRAY_DATA_ROOT"
 
 # The audit's control pair: both classes are adult, so the pediatric confound
@@ -602,8 +586,8 @@ from PIL import Image
 from covid_xray.config import CLASS_NAMES
 
 # Precomputed popcount for every byte value. Used instead of np.bitwise_count
-# so the module works on numpy 1.x as well as 2.x — Colab's numpy version is
-# outside our control.
+# so the module works on numpy 1.x as well as 2.x — the notebook platform's
+# numpy version is outside our control.
 _POPCOUNT8 = np.unpackbits(
     np.arange(256, dtype=np.uint8)[:, None], axis=1
 ).sum(axis=1).astype(np.uint8)
@@ -1008,23 +992,33 @@ manifests are committed, this notebook is never re-run with a different seed.
 
 - [ ] **Step 1: Cell — download the dataset (re-run once per session)**
 
-Put your Kaggle API token at `MyDrive/kaggle/kaggle.json` — in Drive, so it
-survives, and outside the repo, so it never risks being committed.
+Runs locally. Fetch the dataset once into `data/raw/`, which is gitignored.
+
+```bash
+pip install kaggle          # into the project virtualenv
+# Kaggle -> Settings -> API -> Create New Token, then:
+mkdir -p ~/.kaggle && mv ~/Downloads/kaggle.json ~/.kaggle/ && chmod 600 ~/.kaggle/kaggle.json
+
+mkdir -p data/raw
+kaggle datasets download -d tawsifurrahman/covid19-radiography-database -p data/raw --unzip
+```
+
+~800 MB. Then, in the notebook:
 
 ```python
-os.environ['KAGGLE_CONFIG_DIR'] = '/content/drive/MyDrive/kaggle'
-assert Path('/content/drive/MyDrive/kaggle/kaggle.json').exists(), \
-    'put your Kaggle API token at MyDrive/kaggle/kaggle.json'
-!chmod 600 /content/drive/MyDrive/kaggle/kaggle.json
+from pathlib import Path
 
-!kaggle datasets download -d tawsifurrahman/covid19-radiography-database -p /content --unzip -q
-assert DATA_ROOT.exists(), sorted(p.name for p in Path('/content').iterdir())
+REPO_ROOT = Path.cwd().parent if Path.cwd().name == 'notebooks' else Path.cwd()
+DATA_ROOT = REPO_ROOT / 'data' / 'raw' / 'COVID-19_Radiography_Dataset'
+
+assert DATA_ROOT.exists(), f'not found at {DATA_ROOT}; check the unzip path'
 sorted(p.name for p in DATA_ROOT.iterdir())
 ```
 
-~800 MB, two to three minutes. Downloads to the VM's local disk, **not** Drive
-— it is transient by design and re-fetching is faster than the Drive I/O
-penalty it would otherwise impose on every training epoch.
+Doing this locally rather than on Kaggle means the split manifests land
+straight in the repo and are committed in the same breath — no artefact
+retrieval, no push-from-notebook credential dance. Kaggle is not needed until
+Task 9.
 
 - [ ] **Step 2: Cell — verify the layout matches the spec's assumptions**
 
@@ -1276,7 +1270,7 @@ def test_downsampled_features_have_expected_shape(manifest, synthetic_dataset):
 Run: `pytest tests/test_data.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'covid_xray.data'`
 (or SKIP entirely if TensorFlow is not installed locally — that is acceptable;
-these tests then run on Colab in Task 9.)
+these tests then run on Kaggle in Task 9.)
 
 - [ ] **Step 3: Write `src/covid_xray/data.py`**
 
@@ -2014,7 +2008,7 @@ the top block at lr 1e-5. Selection is on validation macro-F1 rather than
 accuracy, because accuracy is dominated by the Normal class and would happily
 select a model that never predicts Viral Pneumonia.
 
-BackupAndRestore is included because Colab sessions terminate without warning;
+BackupAndRestore is included because Kaggle sessions terminate without warning;
 a killed session resumes from the last completed epoch rather than from zero.
 """
 
@@ -2155,7 +2149,7 @@ Expected: PASS. All modules to date green.
 
 ```bash
 git add src/covid_xray/train.py tests/test_train.py configs/
-git commit -m "feat: two-stage training loop with macro-F1 selection and Colab backup"
+git commit -m "feat: two-stage training loop with macro-F1 selection and session backup"
 ```
 
 ---
@@ -2178,10 +2172,11 @@ the histories are written.
 
 The standard bootstrap cell, verbatim (see Execution Environment above).
 
-- [ ] **Step 2: Cell 2 — fetch the dataset**
+- [ ] **Step 2: Cell 2 — confirm the dataset is attached**
 
-The Task 4 Step 1 download cell, verbatim. `/content` was wiped when the VM
-recycled; Drive was not.
+No download step: the dataset mounts read-only at `/kaggle/input/`. If the
+assert in the bootstrap cell fired, use *+ Add Input* and search
+`covid19-radiography-database`.
 
 - [ ] **Step 3: Cell 3 — confirm the GPU**
 
@@ -2209,9 +2204,9 @@ def run_densenet(config_name):
     enable_mixed_precision(cfg)
     train_ds = build_dataset(manifests['train'], DATA_ROOT, cfg, training=True,
                              augmenter=build_augmenter(cfg),
-                             cache_path=f'/content/cache_{cfg.name}_train')
+                             cache_path=f'/kaggle/tmp/cache_{cfg.name}_train')
     val_ds = build_dataset(manifests['val'], DATA_ROOT, cfg, training=False,
-                           cache_path=f'/content/cache_{cfg.name}_val')
+                           cache_path=f'/kaggle/tmp/cache_{cfg.name}_val')
     return train_two_stage(cfg, train_ds, val_ds, CKPT_ROOT)
 ```
 
@@ -2300,20 +2295,28 @@ val macro-F1 above 0.25.
 
 Checkpoints are gitignored; only the notebook and the histories are tracked.
 
-Run this **from the Drive clone on the Colab VM**, then pull locally. A shell
-cell in the notebook works:
+Two artefact classes, two destinations.
 
-```bash
-cd "$REPO_ROOT"
-git add notebooks/02_train.ipynb
-git add -f checkpoints/run1_raw_history.json checkpoints/run2_masked_history.json checkpoints/run4_lungs_removed_history.json
-git commit -m "feat: training notebook and completed histories for all four runs"
-git push
+**Small, belongs in the repo** — the history JSONs. Push from the notebook
+using a token stored in *Add-ons → Secrets* as `GITHUB_TOKEN`:
+
+```python
+from kaggle_secrets import UserSecretsClient
+token = UserSecretsClient().get_secret("GITHUB_TOKEN")
+
+!git -C {REPO_ROOT} config user.name  "Daniel-Chacha"
+!git -C {REPO_ROOT} config user.email "nyansapolabs.dev@gmail.com"
+!git -C {REPO_ROOT} add -f checkpoints/*_history.json
+!git -C {REPO_ROOT} commit -q -m "results: training histories for all four runs"
+!git -C {REPO_ROOT} push -q https://{token}@github.com/Daniel-Chacha/covid-xray-detection.git main
 ```
 
-Pushing from Colab needs a credential — use a fine-grained personal access
-token in the clone URL, or `gh auth login`. The `.keras` weights stay in Drive
-and are never pushed; they are ~90 MB each and belong nowhere near git.
+**Large, must never touch git** — the `.keras` checkpoints, ~90 MB each. Click
+**Save Version**, which persists `/kaggle/working` as notebook output. Task 11
+then attaches that output as a data source rather than downloading anything.
+
+Simpler alternative if the token setup is unwelcome: download the history
+JSONs from the notebook output panel and commit them locally.
 
 ---
 
@@ -2678,9 +2681,9 @@ git commit -m "feat: metric suite with bootstrap CIs and control-pair evaluation
 
 - [ ] **Step 1: Cell 1 — setup and load the trained models**
 
-Run the **bootstrap cell first** — this is a fresh Colab session, so Drive is
-unmounted and `/content/data` is empty. Then re-fetch the dataset with the
-Task 4 Step 1 cell. The checkpoints are already in Drive and need no refetch.
+Run the **Kaggle bootstrap cell first**. Attach two inputs: the dataset, and
+**Task 9's notebook output** (*+ Add Input → Your Work → Notebook Output*),
+which is where the `.keras` checkpoints live.
 
 ```python
 import json, sys
@@ -2689,9 +2692,10 @@ import joblib, numpy as np, pandas as pd, matplotlib.pyplot as plt
 from tensorflow import keras
 
 # REPO_ROOT, DATA_ROOT and sys.path come from the bootstrap cell above.
-assert (REPO_ROOT / 'checkpoints' / 'run1_raw_final.keras').exists(), \
-    'checkpoints missing — did Task 9 complete and write to Drive?'
-assert DATA_ROOT.exists(), 'dataset missing — re-run the Task 4 Step 1 download cell'
+CKPT_ROOT = Path('/kaggle/input/<task-9-notebook-slug>')   # <-- attached notebook output
+assert (CKPT_ROOT / 'run1_raw_final.keras').exists(), \
+    'checkpoints missing — attach Task 9 notebook output via + Add Input'
+assert DATA_ROOT.exists(), 'dataset missing — attach it via + Add Input'
 
 from covid_xray.config import CLASS_NAMES, load_config
 from covid_xray.splits import load_manifest
@@ -3042,8 +3046,8 @@ git commit -m "feat: Grad-CAM with quantified lung attribution ratio"
 
 ## Task 13: Notebook 04 — the confound audit
 
-> **Environment: Colab web UI (GPU).** Grad-CAM over the full test set is
-> gradient work on every image — slow on CPU, minutes on a T4.
+> **Kaggle, GPU.** Grad-CAM runs a backward pass per test image — minutes on
+> a T4, painfully slow otherwise.
 
 **Files:**
 - Create: `notebooks/04_gradcam_audit.ipynb`
@@ -3051,8 +3055,8 @@ git commit -m "feat: Grad-CAM with quantified lung attribution ratio"
 
 - [ ] **Step 1: Cell 1 — setup**
 
-Run the **bootstrap cell first**, then the Task 4 Step 1 download cell. Same
-reason as Task 11: a fresh session has neither Drive nor the dataset.
+Run the **Kaggle bootstrap cell first**, and attach both the dataset and
+Task 9's notebook output. Same as Task 11.
 
 ```python
 import sys
@@ -3062,7 +3066,7 @@ from PIL import Image
 from tensorflow import keras
 
 # REPO_ROOT, DATA_ROOT and sys.path come from the bootstrap cell above.
-assert DATA_ROOT.exists(), 'dataset missing — re-run the Task 4 Step 1 download cell'
+assert DATA_ROOT.exists(), 'dataset missing — attach it via + Add Input'
 
 from covid_xray.config import CLASS_NAMES, load_config
 from covid_xray.splits import load_manifest
