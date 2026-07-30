@@ -82,20 +82,14 @@ The task bodies specify file contents and shell commands in ordinary form.
 Translate them mechanically:
 
 **1. Creating a file.** Every `**Files:** Create: <path>` step becomes a
-`%%writefile` cell. The magic must be the **very first line** of the cell — no
-comment above it — and the path is relative to the repo root, since the
-bootstrap already `%cd`-ed there:
+`%%writefile` cell — the magic must be the very first line, with an absolute
+path:
 
 ````
-%%writefile src/covid_xray/config.py
+%%writefile /content/drive/MyDrive/covid-xray-detection/src/covid_xray/config.py
 """Run configuration.
 ...
 ````
-
-`%%writefile` does not expand `{variables}` in its argument, so use a literal
-path. It also silently truncates the target, which is what you want on a
-re-run but means a partial paste destroys the previous version — paste whole
-cells, never fragments.
 
 **2. Running a command.** Every `Run: pytest ...` becomes `!pytest ...` in a
 code cell. The bootstrap already `%cd`-ed to the repo root, so relative paths
@@ -1793,6 +1787,8 @@ def build_probe(seed: int = 42) -> Pipeline:
     the label is recoverable from global intensity structure alone and no
     amount of DenseNet accuracy means what it appears to mean.
     """
+    # No `multi_class` argument: it was deprecated in scikit-learn 1.5 and
+    # REMOVED in 1.7. With lbfgs, multinomial is the behaviour anyway.
     return Pipeline(
         [
             ("scale", StandardScaler()),
@@ -1800,7 +1796,6 @@ def build_probe(seed: int = 42) -> Pipeline:
                 "logreg",
                 LogisticRegression(
                     max_iter=2000,
-                    multi_class="multinomial",
                     class_weight="balanced",
                     random_state=seed,
                 ),
@@ -1813,10 +1808,6 @@ def build_probe(seed: int = 42) -> Pipeline:
 
 Run: `pytest tests/test_models.py -v`
 Expected: PASS, 9 tests. First run downloads ImageNet weights (~33 MB).
-
-> If `multi_class="multinomial"` emits a deprecation warning on your
-> scikit-learn version, drop the argument — multinomial is the default for
-> `lbfgs` in recent versions. Do not change the solver.
 
 - [ ] **Step 5: Commit**
 
@@ -3019,8 +3010,8 @@ git commit -m "feat: Grad-CAM with quantified lung attribution ratio"
 
 ## Task 13: Notebook 04 — the confound audit
 
-> GPU runtime. Grad-CAM over the full test set runs a backward pass per image
-> — minutes on a T4, painfully slow otherwise.
+> **Environment: Colab web UI (GPU).** Grad-CAM over the full test set is
+> gradient work on every image — slow on CPU, minutes on a T4.
 
 **Files:**
 - Create: `notebooks/04_gradcam_audit.ipynb`
