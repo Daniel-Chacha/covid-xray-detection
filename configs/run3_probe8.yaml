@@ -1,0 +1,5 @@
+# Run 3 — shortcut probe. If a linear model on 64 pixels separates the
+# classes, the label is readable from global intensity alone.
+name: run3_probe8
+variant: downsample8
+model: logreg8

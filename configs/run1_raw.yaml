@@ -1,0 +1,4 @@
+# Run 1 — headline number. Unmodified images.
+name: run1_raw
+variant: raw
+model: densenet121

@@ -1,0 +1,6 @@
+# Run 4 — shortcut probe. Exact inverse of run 2: the lungs are erased and
+# everything else retained. High accuracy here means the pathology was never
+# necessary.
+name: run4_lungs_removed
+variant: lungs_removed
+model: densenet121

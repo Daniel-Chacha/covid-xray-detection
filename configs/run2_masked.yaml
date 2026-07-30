@@ -1,0 +1,5 @@
+# Run 2 — everything outside the lung mask zeroed. The accuracy gap against
+# run 1 is the project's central finding.
+name: run2_masked
+variant: masked
+model: densenet121
