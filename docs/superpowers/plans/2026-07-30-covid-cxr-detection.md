@@ -389,7 +389,13 @@ from covid_xray.config import CLASS_NAMES
 # Small enough to keep tests fast, large enough that a 224 resize is a real
 # resize and an 8x8 downsample is a real reduction.
 FIXTURE_IMAGE_SIZE = 64
-COUNTS = {"COVID": 6, "Lung_Opacity": 5, "Normal": 8, "Viral Pneumonia": 4}
+
+# Counts must survive a TWO-stage stratified split: 30% is held out, then
+# halved into val/test. sklearn refuses to stratify a class with fewer than 2
+# members, so the smallest class needs enough images that its 30% share is at
+# least 2 — and comfortably more than that, since the allocation rounds.
+# Mirrors the real imbalance (Normal largest, Viral Pneumonia smallest).
+COUNTS = {"COVID": 14, "Lung_Opacity": 12, "Normal": 20, "Viral Pneumonia": 12}
 
 
 def _deterministic_image(seed: int, size: int = FIXTURE_IMAGE_SIZE) -> np.ndarray:
@@ -424,6 +430,13 @@ def synthetic_dataset(tmp_path: Path) -> Path:
     source.save(root / "Normal" / "images" / "Normal-8.png")
 
     return root
+
+
+@pytest.fixture
+def fixture_counts() -> dict[str, int]:
+    """Per-class counts, so tests assert against the fixture rather than a
+    hard-coded total that silently rots when COUNTS changes."""
+    return dict(COUNTS)
 
 
 @pytest.fixture
@@ -473,10 +486,10 @@ from covid_xray.dedup import (
 )
 
 
-def test_scan_finds_every_image_and_pairs_its_mask(synthetic_dataset):
+def test_scan_finds_every_image_and_pairs_its_mask(synthetic_dataset, fixture_counts):
     df = scan_dataset(synthetic_dataset)
 
-    assert len(df) == 23  # 6 + 5 + 8 + 4
+    assert len(df) == sum(fixture_counts.values())
     assert set(df.columns) >= {"path", "mask_path", "class_name", "label", "md5", "phash"}
     assert df["label"].tolist() == sorted(df["label"].tolist())  # grouped by class order
     for _, row in df.iterrows():
@@ -840,6 +853,25 @@ def test_class_distribution_counts_by_split(scanned):
     result = stratified_split(scanned, seed=42)
     table = class_distribution(result)
     assert table.loc["COVID"].sum() == (result["class_name"] == "COVID").sum()
+
+
+def test_split_rejects_a_class_with_too_few_members(scanned):
+    """Documents a real constraint rather than leaving it to be rediscovered.
+
+    A two-stage stratified split needs every class to survive both stages.
+    sklearn refuses to stratify a single-member class, and failing loudly is
+    correct — silently dropping a class from val or test would corrupt every
+    downstream metric without any visible symptom.
+    """
+    starved = pd.concat(
+        [
+            scanned[scanned["class_name"] != "Viral Pneumonia"],
+            scanned[scanned["class_name"] == "Viral Pneumonia"].head(1),
+        ]
+    )
+
+    with pytest.raises(ValueError, match="least populated"):
+        stratified_split(starved, seed=42)
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
