@@ -1,0 +1,21 @@
+# Core numerics — needed for every task
+numpy>=1.26
+pandas>=2.0
+scikit-learn>=1.4
+Pillow>=10.0
+matplotlib>=3.8
+PyYAML>=6.0
+tqdm>=4.66
+
+# De-duplication (Task 2)
+ImageHash>=4.3
+
+# Deep learning (Tasks 5-13).
+# Colab already provides TensorFlow — do NOT pip install it there, it will
+# break the preinstalled CUDA stack. Install locally only if you want to run
+# the TF-dependent tests on CPU.
+tensorflow>=2.19
+keras>=3.4
+
+# Testing
+pytest>=8.0

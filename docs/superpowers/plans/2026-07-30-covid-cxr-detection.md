@@ -30,6 +30,44 @@ Every task's requirements implicitly include this section.
 
 ---
 
+## Execution Environments
+
+Work is split across two environments. The dividing line is simple: **only
+Tasks 9, 11 and 13 need a GPU.** Everything else — including all 63 unit tests
+— runs on CPU in seconds to minutes.
+
+| Tasks | Where | Notes |
+|---|---|---|
+| **1–8, 10, 12** | Local VS Code, CPU | Every module and its tests. `test_models.py` does a 64×64 forward pass and `test_train.py` fits one epoch on 16 synthetic 32×32 images — both trivial on CPU. Task 2's de-duplication scan over 21k images peaks near 200 MB. |
+| **9, 11, 13** | **Colab web UI**, GPU | The three long notebooks: training (~6 hrs total), test-set evaluation, and the Grad-CAM audit. |
+
+**Why the browser and not the VS Code Colab extension for Tasks 9/11/13.** The
+extension is officially supported and works well, but `google.colab.drive.mount()`
+is unreliable through it — open issues report the OAuth prompt never rendering,
+the call hanging 60–120 s, and then failing with `ValueError: mount failed`.
+These three notebooks depend on Drive for checkpoint persistence, and three
+~2 hr training runs exceed a single Colab session, so weights *must* survive
+across sessions or Task 11 has nothing to evaluate. The browser frontend
+mounts Drive reliably; use it for these three and stay in VS Code for the rest.
+
+If you prefer to stay in VS Code throughout, the same notebooks work provided
+you solve persistence another way (service-account Drive API, or checkpoints
+pushed to a private repo via Git LFS). That is more setup than this project
+warrants, but nothing in the code prevents it.
+
+**Prerequisite for Tasks 9/11/13: a GitHub remote.** The Colab VM cannot see
+your local files. The bootstrap cell clones the repo into Drive and pulls on
+every subsequent session, which is also what keeps the code that produced your
+results identical to the code in your history. Create the remote before Task 9;
+Tasks 1–8 do not need it.
+
+**Local iteration loop for Tasks 9/11/13:** edit locally → commit → push →
+re-run the bootstrap cell (it pulls) → re-run the affected cell. The notebooks
+call `%autoreload 2` so re-imports pick up the pulled changes without a kernel
+restart.
+
+---
+
 ## File Structure
 
 ```
@@ -62,6 +100,8 @@ notebooks/01_eda_and_dedup, 02_train, 03_evaluate, 04_gradcam_audit
 ---
 
 ## Task 1: Package scaffold, config, and test fixtures
+
+> **Environment: local VS Code, CPU.** As are Tasks 2–8, 10 and 12.
 
 **Files:**
 - Create: `requirements.txt`, `src/covid_xray/__init__.py`, `src/covid_xray/config.py`, `tests/conftest.py`, `tests/test_config.py`, `pytest.ini`
@@ -2038,6 +2078,9 @@ git commit -m "feat: two-stage training loop with macro-F1 selection and Colab b
 
 ## Task 9: Notebook 02 — execute the four runs
 
+> **Environment: Colab web UI (GPU).** Requires a GitHub remote and
+> `kaggle.json` in Drive. ~6 hrs of GPU time across three runs.
+
 **Files:**
 - Create: `notebooks/02_train.ipynb`
 - Produces: `checkpoints/<run>_final.keras`, `<run>_history.json`, `run3_probe8.joblib` (all gitignored)
@@ -2046,10 +2089,16 @@ git commit -m "feat: two-stage training loop with macro-F1 selection and Colab b
 hold is that each run completes, validation macro-F1 exceeds chance (0.25), and
 the histories are written.
 
-- [ ] **Step 1: Cell 1 — Colab setup**
+- [ ] **Step 1: Cell 1 — bootstrap (reused verbatim by notebooks 03 and 04)**
+
+Run this in the **Colab web UI**, not the VS Code extension — see Execution
+Environments above for why. Set `REPO_URL` to your remote before first use.
 
 ```python
-# Colab only. Mount Drive so checkpoints survive session death.
+# --- Colab web UI bootstrap -------------------------------------------------
+# Repo lives in Drive so checkpoints survive session death.
+# Data lives on the VM's local disk: reading 21k files from mounted Drive is
+# roughly an order of magnitude slower and would bottleneck every epoch.
 from google.colab import drive
 drive.mount('/content/drive')
 
@@ -2059,23 +2108,53 @@ drive.mount('/content/drive')
 import os, sys
 from pathlib import Path
 
+REPO_URL  = 'https://github.com/<you>/covid-xray-detection.git'   # <-- set this
 REPO_ROOT = Path('/content/drive/MyDrive/covid-xray-detection')
-DATA_ROOT = Path('/content/data/COVID-19_Radiography_Dataset')   # local disk: much faster than Drive
+DATA_ROOT = Path('/content/data/COVID-19_Radiography_Dataset')
 CKPT_ROOT = REPO_ROOT / 'checkpoints'
+
+# Clone on first use, pull on every session thereafter. This is what keeps the
+# code that produced the results identical to the code in the git history.
+if (REPO_ROOT / '.git').exists():
+    !git -C "{REPO_ROOT}" pull -q
+else:
+    !git clone -q {REPO_URL} "{REPO_ROOT}"
+
 sys.path.insert(0, str(REPO_ROOT / 'src'))
 CKPT_ROOT.mkdir(parents=True, exist_ok=True)
+
+%load_ext autoreload
+%autoreload 2
+
+print('repo :', REPO_ROOT, (REPO_ROOT / 'src' / 'covid_xray').exists())
+print('ckpt :', CKPT_ROOT)
 ```
+
+If `drive.mount` hangs for more than two minutes with no OAuth prompt, you are
+running through the VS Code extension rather than the browser. Switch frontends
+rather than working around it.
 
 - [ ] **Step 2: Cell 2 — fetch the dataset to local disk**
 
 Reading 21k files from mounted Drive is roughly an order of magnitude slower
 than from Colab's local disk. Copy once per session.
 
+Put `kaggle.json` at `MyDrive/kaggle/kaggle.json` — **outside** the repo, since
+the repo is a GitHub clone and `kaggle.json` is gitignored, so it will never
+arrive with the code.
+
 ```python
-os.environ['KAGGLE_CONFIG_DIR'] = str(REPO_ROOT)   # expects kaggle.json there, gitignored
+os.environ['KAGGLE_CONFIG_DIR'] = '/content/drive/MyDrive/kaggle'
+assert Path('/content/drive/MyDrive/kaggle/kaggle.json').exists(), \
+    'put your Kaggle API token at MyDrive/kaggle/kaggle.json'
+!chmod 600 /content/drive/MyDrive/kaggle/kaggle.json
+
 !kaggle datasets download -d tawsifurrahman/covid19-radiography-database -p /content --unzip -q
 assert DATA_ROOT.exists(), sorted(p.name for p in Path('/content').iterdir())
 ```
+
+Roughly 800 MB, two to three minutes. Re-run once per session — `/content` is
+wiped when the VM recycles.
 
 - [ ] **Step 3: Cell 3 — confirm the GPU**
 
@@ -2194,11 +2273,20 @@ val macro-F1 above 0.25.
 
 Checkpoints are gitignored; only the notebook and the histories are tracked.
 
+Run this **from the Drive clone on the Colab VM**, then pull locally. A shell
+cell in the notebook works:
+
 ```bash
+cd "$REPO_ROOT"
 git add notebooks/02_train.ipynb
 git add -f checkpoints/run1_raw_history.json checkpoints/run2_masked_history.json checkpoints/run4_lungs_removed_history.json
 git commit -m "feat: training notebook and completed histories for all four runs"
+git push
 ```
+
+Pushing from Colab needs a credential — use a fine-grained personal access
+token in the clone URL, or `gh auth login`. The `.keras` weights stay in Drive
+and are never pushed; they are ~90 MB each and belong nowhere near git.
 
 ---
 
@@ -2553,6 +2641,8 @@ git commit -m "feat: metric suite with bootstrap CIs and control-pair evaluation
 
 ## Task 11: Notebook 03 — evaluation on the frozen test set
 
+> **Environment: Colab web UI (GPU).** Reads the checkpoints Task 9 wrote to Drive.
+
 **This is the first and only time the test set is read.**
 
 **Files:**
@@ -2561,15 +2651,20 @@ git commit -m "feat: metric suite with bootstrap CIs and control-pair evaluation
 
 - [ ] **Step 1: Cell 1 — setup and load the trained models**
 
+Run the **Task 9 Step 1 bootstrap cell verbatim first** — this is a fresh Colab
+session, so Drive is unmounted and `/content/data` is empty. Then re-fetch the
+dataset with the Task 9 Step 2 cell. The checkpoints are already in Drive.
+
 ```python
 import json, sys
 from pathlib import Path
 import joblib, numpy as np, pandas as pd, matplotlib.pyplot as plt
 from tensorflow import keras
 
-REPO_ROOT = Path('/content/drive/MyDrive/covid-xray-detection')
-DATA_ROOT = Path('/content/data/COVID-19_Radiography_Dataset')
-sys.path.insert(0, str(REPO_ROOT / 'src'))
+# REPO_ROOT, DATA_ROOT and sys.path come from the bootstrap cell above.
+assert (REPO_ROOT / 'checkpoints' / 'run1_raw_final.keras').exists(), \
+    'checkpoints missing — did Task 9 complete and write to Drive?'
+assert DATA_ROOT.exists(), 'dataset missing — re-run the Task 9 Step 2 download cell'
 
 from covid_xray.config import CLASS_NAMES, load_config
 from covid_xray.splits import load_manifest
@@ -2920,11 +3015,18 @@ git commit -m "feat: Grad-CAM with quantified lung attribution ratio"
 
 ## Task 13: Notebook 04 — the confound audit
 
+> **Environment: Colab web UI (GPU).** Grad-CAM over the full test set is
+> gradient work on every image — slow on CPU, minutes on a T4.
+
 **Files:**
 - Create: `notebooks/04_gradcam_audit.ipynb`
 - Produces: `reports/attribution_ratios.csv`, `reports/figures/gradcam_panel.png`, `reports/figures/attribution_by_class.png`, `reports/figures/failure_gallery.png`
 
 - [ ] **Step 1: Cell 1 — setup**
+
+Run the **Task 9 Step 1 bootstrap cell verbatim first**, then the Task 9 Step 2
+download cell. Same reason as Task 11: a fresh session has neither Drive nor
+the dataset.
 
 ```python
 import sys
@@ -2933,9 +3035,8 @@ import numpy as np, pandas as pd, matplotlib.pyplot as plt
 from PIL import Image
 from tensorflow import keras
 
-REPO_ROOT = Path('/content/drive/MyDrive/covid-xray-detection')
-DATA_ROOT = Path('/content/data/COVID-19_Radiography_Dataset')
-sys.path.insert(0, str(REPO_ROOT / 'src'))
+# REPO_ROOT, DATA_ROOT and sys.path come from the bootstrap cell above.
+assert DATA_ROOT.exists(), 'dataset missing — re-run the Task 9 Step 2 download cell'
 
 from covid_xray.config import CLASS_NAMES, load_config
 from covid_xray.splits import load_manifest
