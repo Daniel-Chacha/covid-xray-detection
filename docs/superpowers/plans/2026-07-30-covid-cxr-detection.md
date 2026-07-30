@@ -1658,6 +1658,7 @@ from covid_xray.config import RunConfig
 from covid_xray.models import (
     build_densenet121,
     build_probe,
+    get_base_model,
     set_finetune_trainable,
     split_feature_and_head,
 )
@@ -1686,13 +1687,13 @@ def test_outputs_are_a_probability_distribution(model, cfg):
 
 
 def test_base_is_frozen_immediately_after_build(model):
-    base = model.get_layer("densenet121")
+    base = get_base_model(model)
     assert base.trainable is False
 
 
 def test_stage_b_unfreezes_from_the_named_block(model):
     count = set_finetune_trainable(model, "conv5_block1")
-    base = model.get_layer("densenet121")
+    base = get_base_model(model)
 
     assert count > 0
     assert base.get_layer("conv1/conv").trainable is False
@@ -1702,7 +1703,7 @@ def test_stage_b_unfreezes_from_the_named_block(model):
 def test_batchnorm_stays_frozen_after_unfreezing(model):
     """The single most common silent Keras fine-tuning bug."""
     set_finetune_trainable(model, "conv5_block1")
-    base = model.get_layer("densenet121")
+    base = get_base_model(model)
     bn_layers = [l for l in base.layers if isinstance(l, keras.layers.BatchNormalization)]
 
     assert bn_layers, "expected BatchNormalization layers in DenseNet121"
@@ -1772,9 +1773,9 @@ from tensorflow import keras
 
 from covid_xray.config import RunConfig
 
-BASE_NAME = "densenet121"
 # DenseNet121's final activation, shape (7, 7, 1024) at 224x224 input.
-# This is the Grad-CAM target layer.
+# This is the Grad-CAM target layer. Exact-match lookup: many layers contain
+# "relu" in their name, but only the final activation is named exactly "relu".
 FEATURE_LAYER = "relu"
 
 
@@ -1790,7 +1791,6 @@ def build_densenet121(cfg: RunConfig) -> keras.Model:
     base = keras.applications.DenseNet121(
         include_top=False, weights="imagenet", input_shape=(cfg.image_size, cfg.image_size, 3)
     )
-    base._name = BASE_NAME
     base.trainable = False  # Stage A: head only
 
     features = base(inputs, training=False)
@@ -1806,18 +1806,31 @@ def build_densenet121(cfg: RunConfig) -> keras.Model:
     return keras.Model(inputs, outputs, name=f"{cfg.name}_densenet121")
 
 
+def get_base_model(model: keras.Model) -> keras.Model:
+    """The nested DenseNet121 inside a classifier built by `build_densenet121`.
+
+    Found by type rather than by name: Keras version changes have moved model
+    naming around, and a `get_layer("densenet121")` lookup that silently starts
+    failing would be diagnosed as a training bug rather than a lookup bug.
+    """
+    for layer in model.layers:
+        if isinstance(layer, keras.Model):
+            return layer
+    raise ValueError(f"no nested base model found in {model.name!r}")
+
+
 def set_finetune_trainable(model: keras.Model, unfreeze_from: str) -> int:
     """Stage B: unfreeze the base from `unfreeze_from` onward, BatchNorm excepted.
 
     Returns the number of layers made trainable.
     """
-    base = model.get_layer(BASE_NAME)
+    base = get_base_model(model)
     base.trainable = True
 
     names = [layer.name for layer in base.layers]
     matches = [i for i, name in enumerate(names) if name.startswith(unfreeze_from)]
     if not matches:
-        raise ValueError(f"no layer starting with {unfreeze_from!r} in {BASE_NAME}")
+        raise ValueError(f"no layer starting with {unfreeze_from!r} in {base.name}")
     cutoff = matches[0]
 
     unfrozen = 0
@@ -1842,7 +1855,7 @@ def split_feature_and_head(model: keras.Model) -> tuple[keras.Model, keras.Model
     internal tensors are not reachable from the outer graph, so the usual
     single-model Grad-CAM recipe fails. Splitting sidesteps that.
     """
-    base = model.get_layer(BASE_NAME)
+    base = get_base_model(model)
     feature_model = keras.Model(base.inputs, base.get_layer(FEATURE_LAYER).output, name="features")
 
     feature_shape = feature_model.output.shape[1:]
@@ -2032,7 +2045,7 @@ def test_two_stage_training_returns_both_histories(tiny_cfg, tiny_data, tmp_path
 def test_base_is_trainable_after_stage_b(tiny_cfg, tiny_data, tmp_path):
     train_ds, val_ds = tiny_data
     model, _ = train_two_stage(tiny_cfg, train_ds, val_ds, tmp_path)
-    assert model.get_layer("densenet121").trainable is True
+    assert get_base_model(model).trainable is True
 
 
 def test_set_global_seed_makes_initialisation_reproducible():
