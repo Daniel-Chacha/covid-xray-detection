@@ -82,14 +82,20 @@ The task bodies specify file contents and shell commands in ordinary form.
 Translate them mechanically:
 
 **1. Creating a file.** Every `**Files:** Create: <path>` step becomes a
-`%%writefile` cell — the magic must be the very first line, with an absolute
-path:
+`%%writefile` cell. The magic must be the **very first line** of the cell — no
+comment above it — and the path is relative to the repo root, since the
+bootstrap already `%cd`-ed there:
 
 ````
-%%writefile /content/drive/MyDrive/covid-xray-detection/src/covid_xray/config.py
+%%writefile src/covid_xray/config.py
 """Run configuration.
 ...
 ````
+
+`%%writefile` does not expand `{variables}` in its argument, so use a literal
+path. It also silently truncates the target, which is what you want on a
+re-run but means a partial paste destroys the previous version — paste whole
+cells, never fragments.
 
 **2. Running a command.** Every `Run: pytest ...` becomes `!pytest ...` in a
 code cell. The bootstrap already `%cd`-ed to the repo root, so relative paths
