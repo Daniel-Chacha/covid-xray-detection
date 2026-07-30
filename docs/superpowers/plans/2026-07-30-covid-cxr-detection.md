@@ -452,7 +452,7 @@ A duplicate spanning a train/test boundary inflates every metric in the report.
 
 **Interfaces:**
 - Consumes: `covid_xray.config.CLASS_NAMES`
-- Produces: `scan_dataset(root: Path) -> pd.DataFrame` with columns `path, mask_path, class_name, label, md5, phash` (paths relative to `root`); `find_duplicate_groups(df: pd.DataFrame, max_distance: int = 5) -> list[list[int]]` returning positional index groups; `drop_duplicates(df: pd.DataFrame, groups: list[list[int]]) -> tuple[pd.DataFrame, pd.DataFrame]` returning `(kept, removed)` where `removed` carries a `duplicate_of` column; `summarise_duplicates(df, groups) -> dict` with keys `n_groups, n_removed, n_within_class, n_cross_class`.
+- Produces: `scan_dataset(root: Path) -> pd.DataFrame` with columns `path, mask_path, class_name, label, md5, phash` (paths relative to `root`); `find_duplicate_groups(df: pd.DataFrame, max_distance: int = 1) -> list[list[int]]` returning positional index groups; `drop_duplicates(df: pd.DataFrame, groups: list[list[int]]) -> tuple[pd.DataFrame, pd.DataFrame]` returning `(kept, removed)` where `removed` carries a `duplicate_of` column; `summarise_duplicates(df, groups) -> dict` with keys `n_groups, n_removed, n_within_class, n_cross_class, max_group_size`.
 
 - [ ] **Step 1: Write the failing test — `tests/test_dedup.py`**
 
@@ -502,7 +502,7 @@ def test_hamming_distances_are_symmetric_and_zero_on_diagonal():
 
 def test_planted_exact_duplicate_is_found(synthetic_dataset):
     df = scan_dataset(synthetic_dataset)
-    groups = find_duplicate_groups(df, max_distance=5)
+    groups = find_duplicate_groups(df)
 
     paired = {frozenset(df.iloc[g]["path"].tolist()) for g in groups}
     expected = frozenset({"COVID/images/COVID-1.png", "Normal/images/Normal-8.png"})
@@ -511,7 +511,7 @@ def test_planted_exact_duplicate_is_found(synthetic_dataset):
 
 def test_drop_duplicates_keeps_one_member_per_group(synthetic_dataset):
     df = scan_dataset(synthetic_dataset)
-    groups = find_duplicate_groups(df, max_distance=5)
+    groups = find_duplicate_groups(df)
 
     kept, removed = drop_duplicates(df, groups)
 
@@ -523,7 +523,7 @@ def test_drop_duplicates_keeps_one_member_per_group(synthetic_dataset):
 def test_retained_member_is_first_by_sorted_filename(synthetic_dataset):
     """Determinism requirement from spec section 2 — not filesystem order."""
     df = scan_dataset(synthetic_dataset)
-    groups = find_duplicate_groups(df, max_distance=5)
+    groups = find_duplicate_groups(df)
     kept, _ = drop_duplicates(df, groups)
 
     # COVID/images/COVID-1.png sorts before Normal/images/Normal-8.png
@@ -533,7 +533,7 @@ def test_retained_member_is_first_by_sorted_filename(synthetic_dataset):
 
 def test_summary_separates_within_class_from_cross_class(synthetic_dataset):
     df = scan_dataset(synthetic_dataset)
-    groups = find_duplicate_groups(df, max_distance=5)
+    groups = find_duplicate_groups(df)
 
     summary = summarise_duplicates(df, groups)
 
@@ -541,6 +541,10 @@ def test_summary_separates_within_class_from_cross_class(synthetic_dataset):
     # The planted pair spans COVID and Normal, so at least one cross-class group.
     assert summary["n_cross_class"] >= 1
     assert summary["n_within_class"] + summary["n_cross_class"] == summary["n_groups"]
+    # Chaining detector: the fixture is random noise plus one planted pair, so
+    # nothing should merge beyond 2. A large value here means the threshold has
+    # collapsed unrelated images into a blob.
+    assert summary["max_group_size"] == 2
 
 
 def test_dedup_is_reproducible(synthetic_dataset):
@@ -551,7 +555,7 @@ def test_dedup_is_reproducible(synthetic_dataset):
 
 def _scan_and_group(root):
     df = scan_dataset(root)
-    return df, find_duplicate_groups(df, max_distance=5)
+    return df, find_duplicate_groups(df)
 ```
 
 - [ ] **Step 2: Run the test to verify it fails**
@@ -651,10 +655,32 @@ def hamming_distances(left: np.ndarray, right: np.ndarray) -> np.ndarray:
     return _POPCOUNT8[xor].sum(axis=2).astype(np.uint8)
 
 
-def find_duplicate_groups(df: pd.DataFrame, max_distance: int = 5) -> list[list[int]]:
+def find_duplicate_groups(df: pd.DataFrame, max_distance: int = 1) -> list[list[int]]:
     """Group images that are byte-identical or perceptually within ``max_distance``.
 
     Returns positional index groups of size >= 2, each sorted ascending.
+
+    The default of 1 is empirical, not conventional. Measured on the full
+    21,165-image dataset:
+
+        threshold   groups  removed  cross-class
+        md5 exact       44       59            0
+        phash <= 1     178      223            0
+        phash <= 3     263      339           17
+        phash <= 5     666     1529          172
+        phash <= 8     355    14403          107
+
+    Cross-class matches are the diagnostic. A genuine duplicate is almost
+    always within-class — same image, same label — so cross-class hits are
+    mostly false positives. At <= 5 they were visually confirmed as different
+    patients: chest radiographs are structurally uniform (two lungs, ribcage,
+    spine, same framing), and a 64-bit DCT hash matches "this is a frontal
+    CXR" rather than "this is the same image."
+
+    The <= 8 row shows the other failure mode. Fewer groups but 14,403 removed
+    means union-find has chained A~B~C into vast blobs where A and C are
+    unrelated. `summarise_duplicates` reports `max_group_size` so this is
+    visible rather than silent.
     """
     n = len(df)
     parent = list(range(n))
@@ -726,13 +752,23 @@ def drop_duplicates(
 
 
 def summarise_duplicates(df: pd.DataFrame, groups: list[list[int]]) -> dict:
-    """Counts for the README. Cross-class groups are label noise, not just waste."""
+    """Counts for the README.
+
+    `n_cross_class` is the false-positive detector: genuine duplicates share a
+    label, so cross-class hits mean either real label noise or an over-loose
+    threshold. `max_group_size` is the chaining detector: union-find is
+    transitive, so a loose threshold produces a few enormous blobs rather than
+    many small groups. A max group size in the hundreds means the threshold has
+    collapsed unrelated images together.
+    """
+    sizes = [len(g) for g in groups]
     within = sum(1 for g in groups if df.iloc[g]["class_name"].nunique() == 1)
     return {
         "n_groups": len(groups),
-        "n_removed": sum(len(g) - 1 for g in groups),
+        "n_removed": sum(size - 1 for size in sizes),
         "n_within_class": within,
         "n_cross_class": len(groups) - within,
+        "max_group_size": max(sizes) if sizes else 0,
     }
 ```
 
@@ -1058,7 +1094,7 @@ catalogue.groupby("class_name").size()
 ```python
 from covid_xray.dedup import find_duplicate_groups, drop_duplicates, summarise_duplicates
 
-groups = find_duplicate_groups(catalogue, max_distance=5)
+groups = find_duplicate_groups(catalogue)   # default max_distance=1, see dedup.py
 summary = summarise_duplicates(catalogue, groups)
 print(summary)
 
