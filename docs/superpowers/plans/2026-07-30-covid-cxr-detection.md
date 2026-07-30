@@ -1250,6 +1250,14 @@ def test_unknown_variant_raises():
         apply_variant(image, mask, "sepia")
 
 
+def test_build_dataset_refuses_the_probe_variant(manifest, synthetic_dataset):
+    """downsample8 has its own extraction path; silently serving full-resolution
+    images here would turn the shortcut probe into a second raw baseline."""
+    cfg = RunConfig(name="t", variant="downsample8", model="logreg8", image_size=32)
+    with pytest.raises(ValueError, match="extract_downsampled_features"):
+        build_dataset(manifest, synthetic_dataset, cfg, training=False)
+
+
 def test_training_dataset_yields_three_element_tuples(manifest, synthetic_dataset):
     cfg = RunConfig(name="t", variant="raw", model="densenet121", batch_size=2, image_size=32)
     ds = build_dataset(manifest[manifest.split == "train"], synthetic_dataset, cfg, training=True)
@@ -1388,6 +1396,12 @@ def build_dataset(
     `(image, one_hot)` otherwise. Evaluation datasets preserve manifest row
     order so predictions can be paired positionally with manifest rows.
     """
+    if cfg.variant == "downsample8":
+        # The 8x8 probe is a scikit-learn model wanting everything in memory.
+        # Without this guard it would silently receive full-resolution raw
+        # images and quietly stop being a probe.
+        raise ValueError("variant 'downsample8' uses extract_downsampled_features, not build_dataset")
+
     data_root = Path(data_root)
     manifest = manifest.reset_index(drop=True)
 
