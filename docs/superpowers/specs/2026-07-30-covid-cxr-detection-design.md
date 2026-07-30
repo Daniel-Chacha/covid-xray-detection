@@ -65,7 +65,7 @@ Worst-case imbalance is Normal against Viral Pneumonia at ≈ 7.6 : 1 — identi
 
 **Note on label semantics.** These four labels are not a clean partition of disease space; they are an artefact of which datasets were merged. A pediatric viral pneumonia *is* a lung opacity, and COVID *is* a viral pneumonia. `Lung Opacity` specifically means "visible lung opacity, cause unspecified, not confirmed COVID" — RSNA chose that deliberately vague wording because a radiograph often cannot reveal the cause of an opacity. The classes are mutually exclusive only by provenance bookkeeping. The README must state this plainly.
 
-**To verify at download time:** confirm per-class counts against the dataset README, since the dataset has been revised across versions. Confirm mask resolution — masks are expected to ship at a different size than the images (256×256 versus 299×299) and must be resized with nearest-neighbour interpolation. Confirm masks exist for all four classes.
+**Verified at download, 2026-07-30.** All four counts above are exact. Images are 299×299 mode `L`; masks are **256×256 mode `RGB`** — binary content stored across three identical channels, and present for all 21,165 images. Two consequences: masks must be resized with nearest-neighbour to match the images, and any PIL-based mask read yields `(H, W, 3)` and must be collapsed to one channel before being used to index a 2-D array.
 
 ### De-duplication
 
@@ -179,7 +179,7 @@ Computed on the frozen test set for every run, and collected into a single table
 - Per-class one-vs-rest ROC-AUC and PR-AUC. PR-AUC is reported alongside ROC-AUC because ROC-AUC is optimistic under class imbalance.
 - Confusion matrix, 4×4, both raw counts and row-normalised
 - **The COVID ↔ Lung Opacity confusion cells, called out explicitly.** These two numbers carry more diagnostic information than the rest of the matrix combined: they measure whether the model can distinguish COVID from another cause of opacity in a same-age population. Expect this to be the model's weakest pair, and expect overall macro-F1 to land well below what a 3-class framing would report. That drop is a more honest number, not a regression.
-- **Bootstrap 95% confidence intervals**, 2,000 resamples of the test set. At a 15% test split the Viral Pneumonia slice holds roughly 200 images against roughly 900 for Lung Opacity and 540 for COVID, so per-class precision is very uneven; reporting bare point estimates would misrepresent it.
+- **Bootstrap 95% confidence intervals**, 2,000 resamples of the test set. The realised test split holds 197 Viral Pneumonia against 1,389 Normal, 881 Lung Opacity and 479 COVID, so per-class precision is very uneven; reporting bare point estimates would misrepresent it.
 - Calibration: reliability diagram and expected calibration error
 
 ---

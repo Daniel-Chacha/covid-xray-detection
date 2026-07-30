@@ -2932,6 +2932,14 @@ def test_attribution_ratio_resizes_a_mask_of_different_resolution():
     assert lung_attribution_ratio(heatmap, mask) == pytest.approx(0.5, abs=0.05)
 
 
+def test_attribution_ratio_accepts_an_rgb_mask():
+    """The dataset ships binary masks encoded as RGB — a PIL read gives (H, W, 3)."""
+    heatmap = np.ones((8, 8), dtype=np.float32)
+    mask = np.zeros((8, 8, 3), dtype=np.uint8)
+    mask[:, :4, :] = 255
+    assert lung_attribution_ratio(heatmap, mask) == pytest.approx(0.5)
+
+
 def test_attribution_ratio_of_an_empty_heatmap_is_nan():
     heatmap = np.zeros((8, 8), dtype=np.float32)
     mask = np.ones((8, 8), dtype=np.uint8) * 255
@@ -2998,8 +3006,12 @@ def lung_attribution_ratio(heatmap: np.ndarray, mask: np.ndarray) -> float:
     """Fraction of attribution mass falling inside the lung mask.
 
     The mask is resized to the heatmap's resolution with nearest-neighbour, so
-    a 256x256 dataset mask and a 224x224 heatmap compare correctly. Returns NaN
-    for an all-zero heatmap, which has no mass to attribute.
+    the dataset's 256x256 masks and a 224x224 heatmap compare correctly.
+    Returns NaN for an all-zero heatmap, which has no mass to attribute.
+
+    The shipped masks are stored as RGB despite being binary, so a PIL read
+    yields (H, W, 3). Collapsing to one channel is required before indexing a
+    2-D heatmap; without it this raises on the dimension mismatch.
     """
     heatmap = np.asarray(heatmap, dtype=np.float64)
     total = heatmap.sum()
@@ -3007,6 +3019,8 @@ def lung_attribution_ratio(heatmap: np.ndarray, mask: np.ndarray) -> float:
         return float("nan")
 
     mask = np.asarray(mask)
+    if mask.ndim == 3:
+        mask = mask[..., 0]
     if mask.shape != heatmap.shape:
         resized = Image.fromarray(mask.astype(np.uint8)).resize(
             (heatmap.shape[1], heatmap.shape[0]), Image.NEAREST
