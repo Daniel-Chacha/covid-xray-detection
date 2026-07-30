@@ -1,0 +1,5 @@
+class_name,train,val,test
+COVID,2381,510,511
+Lung_Opacity,4208,902,902
+Normal,7133,1528,1529
+Viral Pneumonia,937,201,200
