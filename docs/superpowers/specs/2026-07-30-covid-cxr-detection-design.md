@@ -72,7 +72,25 @@ Worst-case imbalance is Normal against Viral Pneumonia at ≈ 7.6 : 1 — identi
 The dataset was aggregated from 43 publications plus the SIRM repository, so exact and near-duplicate images exist. Duplicates spanning a train/test boundary inflate every reported metric.
 
 - **Exact:** MD5 over decoded pixel bytes
-- **Near:** perceptual hash (`imagehash`), Hamming distance ≤ 5
+- **Near:** perceptual hash (`imagehash`), Hamming distance ≤ 1
+
+**Threshold justification (measured 2026-07-30).** The conventional ≤ 5 removed
+1,529 images and produced 172 cross-class groups; visual inspection confirmed
+those matches were *different patients*. Chest radiographs are structurally
+uniform, so a 64-bit DCT hash matches "frontal CXR" rather than "same image".
+At ≤ 1 the pass finds 178 groups and 223 removals with **zero** cross-class
+matches, while still finding four times what MD5 alone does. At ≤ 8 union-find
+chaining collapses the dataset entirely (14,403 removed from only 355 groups),
+which is why `summarise_duplicates` reports `max_group_size`.
+
+**Finding: duplicates are almost entirely a COVID-class phenomenon.**
+COVID 214 removed (5.9%), Viral Pneumonia 7 (0.5%), Normal 2 (0.02%),
+Lung Opacity 0. This is the aggregation history made measurable — COVID images
+were collected from 43 publications and SIRM, where the same case recurs across
+papers, whereas Normal and Lung Opacity arrived wholesale from RSNA. It is
+independent evidence that the COVID class differs from its controls in
+provenance, not only in pathology, and belongs in the README alongside the
+shortcut-probe results.
 - Run **before** splitting, over the full four-class pool (≈ 21,165 images)
 - When a duplicate group is found, retain the first member by sorted filename and drop the rest, so the retained set is deterministic across runs
 - Report counts removed, separated into within-class and **cross-class** duplicates. Cross-class duplicates are label noise and are reported in the README as a dataset finding.
@@ -179,7 +197,7 @@ Computed on the frozen test set for every run, and collected into a single table
 - Per-class one-vs-rest ROC-AUC and PR-AUC. PR-AUC is reported alongside ROC-AUC because ROC-AUC is optimistic under class imbalance.
 - Confusion matrix, 4×4, both raw counts and row-normalised
 - **The COVID ↔ Lung Opacity confusion cells, called out explicitly.** These two numbers carry more diagnostic information than the rest of the matrix combined: they measure whether the model can distinguish COVID from another cause of opacity in a same-age population. Expect this to be the model's weakest pair, and expect overall macro-F1 to land well below what a 3-class framing would report. That drop is a more honest number, not a regression.
-- **Bootstrap 95% confidence intervals**, 2,000 resamples of the test set. The realised test split holds 197 Viral Pneumonia against 1,389 Normal, 881 Lung Opacity and 479 COVID, so per-class precision is very uneven; reporting bare point estimates would misrepresent it.
+- **Bootstrap 95% confidence intervals**, 2,000 resamples of the test set. The realised test split holds 200 Viral Pneumonia against 1,529 Normal, 902 Lung Opacity and 511 COVID, so per-class precision is very uneven; reporting bare point estimates would misrepresent it.
 - Calibration: reliability diagram and expected calibration error
 
 ---
