@@ -2956,6 +2956,8 @@ import pytest
 tf = pytest.importorskip("tensorflow")
 pytestmark = pytest.mark.tf
 
+from tensorflow import keras
+
 from covid_xray.config import RunConfig
 from covid_xray.gradcam import grad_cam, lung_attribution_ratio
 from covid_xray.models import build_densenet121
@@ -2982,9 +2984,30 @@ def test_heatmap_is_non_negative_and_peaks_at_one(model):
 
 
 def test_explicit_class_index_is_honoured(model):
+    """Wires the head deterministically so the comparison is meaningful.
+
+    With the randomly initialised head both class maps can legitimately come
+    back all-zero: Grad-CAM applies ReLU, and an entirely negative weighted
+    feature sum is a real outcome for an untrained network. Two degenerate
+    maps are trivially equal, so the test would fail while saying nothing
+    about whether class_index is honoured. Giving class 0 the first half of
+    the feature channels and class 3 the second half makes both maps
+    non-degenerate and spatially distinct by construction.
+    """
+    dense = next(l for l in model.layers if isinstance(l, keras.layers.Dense))
+    kernel, bias = dense.get_weights()
+    half = kernel.shape[0] // 2
+    kernel[:] = 0.0
+    kernel[:half, 0] = 1.0
+    kernel[half:, 3] = 1.0
+    dense.set_weights([kernel, np.zeros_like(bias)])
+
     batch = tf.random.uniform((1, 64, 64, 3), seed=2)
     first = grad_cam(model, batch, class_index=0)
     second = grad_cam(model, batch, class_index=3)
+
+    assert first.max() > 0, "class 0 map is degenerate; the test cannot discriminate"
+    assert second.max() > 0, "class 3 map is degenerate; the test cannot discriminate"
     assert not np.allclose(first, second)
 
 
