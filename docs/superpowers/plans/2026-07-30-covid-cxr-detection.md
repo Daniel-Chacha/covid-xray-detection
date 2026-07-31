@@ -83,7 +83,13 @@ from pathlib import Path
 
 REPO_URL  = 'https://github.com/Daniel-Chacha/covid-xray-detection.git'
 REPO_ROOT = Path('/kaggle/working/covid-xray-detection')
-DATA_ROOT = Path('/kaggle/input/covid19-radiography-database/COVID-19_Radiography_Dataset')
+# Located by structure, not by name. Kaggle nests the mount under
+# /kaggle/input/datasets/<owner>/<slug>/, and the inner folder name has changed
+# across dataset versions — so find whatever directory contains COVID/images/,
+# which is exactly the layout scan_dataset expects.
+_found = sorted(Path('/kaggle/input').glob('**/COVID/images'))
+assert _found, 'dataset not attached — use "+ Add Input", search covid19-radiography-database'
+DATA_ROOT = _found[0].parent.parent
 
 !pip install -q ImageHash
 if (REPO_ROOT / '.git').exists():
@@ -103,7 +109,7 @@ sys.path.insert(0, str(REPO_ROOT / 'src'))
 # Print the commit being run. A stale clone is the standard failure of this
 # workflow — edit locally, forget to push, silently run yesterday's code.
 !git -C {REPO_ROOT} log -1 --format='running commit %h  %s  (%cr)'
-assert DATA_ROOT.exists(), 'dataset not attached — use "+ Add Input"'
+print('DATA_ROOT:', DATA_ROOT)
 ```
 
 ### Session-death checklist
