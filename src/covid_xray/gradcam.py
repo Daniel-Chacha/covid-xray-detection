@@ -15,14 +15,26 @@ from PIL import Image
 from covid_xray.models import split_feature_and_head
 
 
-def grad_cam(model, image_batch, class_index: int | None = None) -> np.ndarray:
+def grad_cam(
+    model,
+    image_batch,
+    class_index: int | None = None,
+    *,
+    split: tuple | None = None,
+) -> np.ndarray:
     """Gradient-weighted class activation maps for a batch.
 
     `class_index` defaults to each image's own predicted class. Returns a
     `(batch, height, width)` array, each map non-negative and scaled to peak 1.
+
+    `split` optionally supplies a pre-computed `split_feature_and_head(model)`
+    pair. Rebuilding it traverses 427 layers, which is negligible once and
+    costly across a few hundred batches — so callers sweeping a whole split
+    should build it once and pass it in.
     """
-    feature_model, head_model = split_feature_and_head(model)
+    feature_model, head_model = split if split is not None else split_feature_and_head(model)
     images = tf.convert_to_tensor(image_batch)
+
 
     with tf.GradientTape() as tape:
         features = feature_model(images, training=False)
@@ -75,9 +87,10 @@ def lung_attribution_ratio(heatmap: np.ndarray, mask: np.ndarray) -> float:
     return float(heatmap[inside].sum() / total)
 
 
-def batch_attribution_ratios(model, image_batch, mask_batch) -> np.ndarray:
+def batch_attribution_ratios(model, image_batch, mask_batch, *, split=None) -> np.ndarray:
     """Lung Attribution Ratio for every image in a batch."""
-    heatmaps = grad_cam(model, image_batch)
+    heatmaps = grad_cam(model, image_batch, split=split)
     return np.array(
         [lung_attribution_ratio(heat, mask) for heat, mask in zip(heatmaps, mask_batch)]
     )
+
