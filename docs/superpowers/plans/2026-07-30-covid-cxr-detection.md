@@ -2986,21 +2986,29 @@ def test_heatmap_is_non_negative_and_peaks_at_one(model):
 def test_explicit_class_index_is_honoured(model):
     """Wires the head deterministically so the comparison is meaningful.
 
-    With the randomly initialised head both class maps can legitimately come
-    back all-zero: Grad-CAM applies ReLU, and an entirely negative weighted
-    feature sum is a real outcome for an untrained network. Two degenerate
-    maps are trivially equal, so the test would fail while saying nothing
-    about whether class_index is honoured. Giving class 0 the first half of
-    the feature channels and class 3 the second half makes both maps
-    non-degenerate and spatially distinct by construction.
+    With the randomly initialised head both class maps come back all-zero.
+    That is a real Grad-CAM outcome, not a bug: through the softmax,
+    d(p_0)/d(feature_c) is positive for the channels class 0 reads but
+    *negative* for those another likely class reads, so the map is a
+    difference of comparable sums that ReLU can clip to nothing. Two
+    degenerate maps are trivially equal, so the test would fail while saying
+    nothing about whether class_index is honoured.
+
+    The fix has two parts. Class 0 reads the first half of the feature
+    channels and class 3 the second half, so their maps are spatially
+    distinct. And bias parks almost all probability mass on class 1, which
+    drives the p_0*p_3 cross-term to nearly zero and leaves each map a
+    positive weighted sum. Verified: both peak at 1.0 after normalisation.
     """
     dense = next(l for l in model.layers if isinstance(l, keras.layers.Dense))
     kernel, bias = dense.get_weights()
     half = kernel.shape[0] // 2
     kernel[:] = 0.0
-    kernel[:half, 0] = 1.0
-    kernel[half:, 3] = 1.0
-    dense.set_weights([kernel, np.zeros_like(bias)])
+    kernel[:half, 0] = 1e-3
+    kernel[half:, 3] = 1e-3
+    bias = np.zeros_like(bias)
+    bias[1] = 10.0
+    dense.set_weights([kernel, bias])
 
     batch = tf.random.uniform((1, 64, 64, 3), seed=2)
     first = grad_cam(model, batch, class_index=0)
