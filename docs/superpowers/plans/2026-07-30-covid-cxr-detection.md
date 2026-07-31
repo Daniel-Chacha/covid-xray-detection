@@ -92,8 +92,13 @@ else:
     !git clone -q {REPO_URL} {REPO_ROOT}
 
 sys.path.insert(0, str(REPO_ROOT / 'src'))
-%load_ext autoreload
-%autoreload 2
+
+# No %load_ext autoreload: Kaggle's IPython imports `imp` inside that
+# extension, and `imp` was removed in Python 3.12, so the magic raises. It is
+# not needed here — code arrives by git clone, so a fresh session is current.
+# After a mid-session `git pull`, reload explicitly:
+#     import importlib, covid_xray.data; importlib.reload(covid_xray.data)
+# or restart the kernel.
 
 # Print the commit being run. A stale clone is the standard failure of this
 # workflow — edit locally, forget to push, silently run yesterday's code.
