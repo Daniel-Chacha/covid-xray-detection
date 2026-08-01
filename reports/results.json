@@ -1,0 +1,346 @@
+{
+  "run1_raw": {
+    "run": "run1_raw",
+    "macro_f1": 0.852305642382814,
+    "macro_f1_ci": [
+      0.8386130278905984,
+      0.8658370276879208
+    ],
+    "covid_sensitivity": 0.6379647749510763,
+    "covid_specificity": 0.9958190801976435,
+    "covid_specificity_at_95_sensitivity": 0.8916761687571265,
+    "covid_threshold_at_95_sensitivity": 0.0324203185737133,
+    "ece": 0.035204177607327455,
+    "restricted_pair": {
+      "pair": [
+        "COVID",
+        "Lung_Opacity"
+      ],
+      "n": 1413,
+      "accuracy": 0.9221514508138712,
+      "roc_auc": 0.9797297590481688
+    },
+    "per_class": {
+      "precision": {
+        "COVID": 0.9674,
+        "Lung_Opacity": 0.8825,
+        "Normal": 0.8296,
+        "Viral Pneumonia": 0.859
+      },
+      "recall": {
+        "COVID": 0.638,
+        "Lung_Opacity": 0.7993,
+        "Normal": 0.9555,
+        "Viral Pneumonia": 0.975
+      },
+      "f1": {
+        "COVID": 0.7689,
+        "Lung_Opacity": 0.8389,
+        "Normal": 0.8881,
+        "Viral Pneumonia": 0.9133
+      },
+      "support": {
+        "COVID": 511,
+        "Lung_Opacity": 902,
+        "Normal": 1529,
+        "Viral Pneumonia": 200
+      },
+      "roc_auc": {
+        "COVID": 0.9803,
+        "Lung_Opacity": 0.9637,
+        "Normal": 0.9646,
+        "Viral Pneumonia": 0.9983
+      },
+      "pr_auc": {
+        "COVID": 0.9322,
+        "Lung_Opacity": 0.9288,
+        "Normal": 0.9578,
+        "Viral Pneumonia": 0.9793
+      }
+    },
+    "confusion": {
+      "COVID": {
+        "COVID": 326,
+        "Lung_Opacity": 7,
+        "Normal": 4,
+        "Viral Pneumonia": 0
+      },
+      "Lung_Opacity": {
+        "COVID": 60,
+        "Lung_Opacity": 721,
+        "Normal": 36,
+        "Viral Pneumonia": 0
+      },
+      "Normal": {
+        "COVID": 123,
+        "Lung_Opacity": 172,
+        "Normal": 1461,
+        "Viral Pneumonia": 5
+      },
+      "Viral Pneumonia": {
+        "COVID": 2,
+        "Lung_Opacity": 2,
+        "Normal": 28,
+        "Viral Pneumonia": 195
+      }
+    }
+  },
+  "run2_masked": {
+    "run": "run2_masked",
+    "macro_f1": 0.7227526258713582,
+    "macro_f1_ci": [
+      0.7039495619687134,
+      0.7411828324087969
+    ],
+    "covid_sensitivity": 0.48532289628180036,
+    "covid_specificity": 0.9551501330292664,
+    "covid_specificity_at_95_sensitivity": 0.5180539718738122,
+    "covid_threshold_at_95_sensitivity": 0.04687012732028961,
+    "ece": 0.04536932448836972,
+    "restricted_pair": {
+      "pair": [
+        "COVID",
+        "Lung_Opacity"
+      ],
+      "n": 1413,
+      "accuracy": 0.7869780608634112,
+      "roc_auc": 0.8915868628531509
+    },
+    "per_class": {
+      "precision": {
+        "COVID": 0.6776,
+        "Lung_Opacity": 0.9013,
+        "Normal": 0.7651,
+        "Viral Pneumonia": 0.6266
+      },
+      "recall": {
+        "COVID": 0.4853,
+        "Lung_Opacity": 0.6075,
+        "Normal": 0.9307,
+        "Viral Pneumonia": 0.965
+      },
+      "f1": {
+        "COVID": 0.5656,
+        "Lung_Opacity": 0.7258,
+        "Normal": 0.8398,
+        "Viral Pneumonia": 0.7598
+      },
+      "support": {
+        "COVID": 511,
+        "Lung_Opacity": 902,
+        "Normal": 1529,
+        "Viral Pneumonia": 200
+      },
+      "roc_auc": {
+        "COVID": 0.8873,
+        "Lung_Opacity": 0.9349,
+        "Normal": 0.9293,
+        "Viral Pneumonia": 0.9936
+      },
+      "pr_auc": {
+        "COVID": 0.6847,
+        "Lung_Opacity": 0.8673,
+        "Normal": 0.9152,
+        "Viral Pneumonia": 0.9432
+      }
+    },
+    "confusion": {
+      "COVID": {
+        "COVID": 248,
+        "Lung_Opacity": 93,
+        "Normal": 24,
+        "Viral Pneumonia": 1
+      },
+      "Lung_Opacity": {
+        "COVID": 52,
+        "Lung_Opacity": 548,
+        "Normal": 8,
+        "Viral Pneumonia": 0
+      },
+      "Normal": {
+        "COVID": 204,
+        "Lung_Opacity": 227,
+        "Normal": 1423,
+        "Viral Pneumonia": 6
+      },
+      "Viral Pneumonia": {
+        "COVID": 7,
+        "Lung_Opacity": 34,
+        "Normal": 74,
+        "Viral Pneumonia": 193
+      }
+    }
+  },
+  "run3_probe8": {
+    "run": "run3_probe8",
+    "macro_f1": 0.6416531961448761,
+    "macro_f1_ci": [
+      0.6222617235859595,
+      0.6600953345854788
+    ],
+    "covid_sensitivity": 0.5518590998043053,
+    "covid_specificity": 0.8361839604713037,
+    "covid_specificity_at_95_sensitivity": 0.30710756366400604,
+    "covid_threshold_at_95_sensitivity": 0.08784856573173168,
+    "ece": 0.021575048373470775,
+    "restricted_pair": {
+      "pair": [
+        "COVID",
+        "Lung_Opacity"
+      ],
+      "n": 1413,
+      "accuracy": 0.7402689313517339,
+      "roc_auc": 0.8101869730670266
+    },
+    "per_class": {
+      "precision": {
+        "COVID": 0.3955,
+        "Lung_Opacity": 0.6755,
+        "Normal": 0.8148,
+        "Viral Pneumonia": 0.5839
+      },
+      "recall": {
+        "COVID": 0.5519,
+        "Lung_Opacity": 0.653,
+        "Normal": 0.6645,
+        "Viral Pneumonia": 0.905
+      },
+      "f1": {
+        "COVID": 0.4608,
+        "Lung_Opacity": 0.664,
+        "Normal": 0.732,
+        "Viral Pneumonia": 0.7098
+      },
+      "support": {
+        "COVID": 511,
+        "Lung_Opacity": 902,
+        "Normal": 1529,
+        "Viral Pneumonia": 200
+      },
+      "roc_auc": {
+        "COVID": 0.7876,
+        "Lung_Opacity": 0.8648,
+        "Normal": 0.8576,
+        "Viral Pneumonia": 0.984
+      },
+      "pr_auc": {
+        "COVID": 0.4738,
+        "Lung_Opacity": 0.6972,
+        "Normal": 0.8478,
+        "Viral Pneumonia": 0.8342
+      }
+    },
+    "confusion": {
+      "COVID": {
+        "COVID": 282,
+        "Lung_Opacity": 172,
+        "Normal": 249,
+        "Viral Pneumonia": 10
+      },
+      "Lung_Opacity": {
+        "COVID": 107,
+        "Lung_Opacity": 589,
+        "Normal": 171,
+        "Viral Pneumonia": 5
+      },
+      "Normal": {
+        "COVID": 105,
+        "Lung_Opacity": 122,
+        "Normal": 1016,
+        "Viral Pneumonia": 4
+      },
+      "Viral Pneumonia": {
+        "COVID": 17,
+        "Lung_Opacity": 19,
+        "Normal": 93,
+        "Viral Pneumonia": 181
+      }
+    }
+  },
+  "run4_lungs_removed": {
+    "run": "run4_lungs_removed",
+    "macro_f1": 0.8287892946022192,
+    "macro_f1_ci": [
+      0.8133751718688932,
+      0.8435776229994243
+    ],
+    "covid_sensitivity": 0.6203522504892368,
+    "covid_specificity": 0.9931584948688712,
+    "covid_specificity_at_95_sensitivity": 0.8985176738882554,
+    "covid_threshold_at_95_sensitivity": 0.04994848743081093,
+    "ece": 0.011209876379110771,
+    "restricted_pair": {
+      "pair": [
+        "COVID",
+        "Lung_Opacity"
+      ],
+      "n": 1413,
+      "accuracy": 0.913658881811748,
+      "roc_auc": 0.9815348366968815
+    },
+    "per_class": {
+      "precision": {
+        "COVID": 0.9463,
+        "Lung_Opacity": 0.831,
+        "Normal": 0.8227,
+        "Viral Pneumonia": 0.8041
+      },
+      "recall": {
+        "COVID": 0.6204,
+        "Lung_Opacity": 0.8016,
+        "Normal": 0.9104,
+        "Viral Pneumonia": 0.985
+      },
+      "f1": {
+        "COVID": 0.7494,
+        "Lung_Opacity": 0.816,
+        "Normal": 0.8643,
+        "Viral Pneumonia": 0.8854
+      },
+      "support": {
+        "COVID": 511,
+        "Lung_Opacity": 902,
+        "Normal": 1529,
+        "Viral Pneumonia": 200
+      },
+      "roc_auc": {
+        "COVID": 0.9775,
+        "Lung_Opacity": 0.9508,
+        "Normal": 0.9414,
+        "Viral Pneumonia": 0.9983
+      },
+      "pr_auc": {
+        "COVID": 0.9132,
+        "Lung_Opacity": 0.904,
+        "Normal": 0.9326,
+        "Viral Pneumonia": 0.9792
+      }
+    },
+    "confusion": {
+      "COVID": {
+        "COVID": 317,
+        "Lung_Opacity": 7,
+        "Normal": 10,
+        "Viral Pneumonia": 1
+      },
+      "Lung_Opacity": {
+        "COVID": 58,
+        "Lung_Opacity": 723,
+        "Normal": 89,
+        "Viral Pneumonia": 0
+      },
+      "Normal": {
+        "COVID": 131,
+        "Lung_Opacity": 167,
+        "Normal": 1392,
+        "Viral Pneumonia": 2
+      },
+      "Viral Pneumonia": {
+        "COVID": 5,
+        "Lung_Opacity": 5,
+        "Normal": 38,
+        "Viral Pneumonia": 197
+      }
+    }
+  }
+}
