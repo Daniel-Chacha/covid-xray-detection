@@ -44,7 +44,21 @@ Two readings, both awkward:
 
 This rules out the obvious objection to `run4`. COVID's characteristic pattern is peripheral and subpleural — exactly where an imperfect segmentation boundary sits — so one might argue the lungs-erased model is reading genuine opacity that leaked past the mask edge. Subpleural consolidation is not visible in 64 pixels.
 
-### A third line of evidence, found before training
+### The age confound, measured rather than argued
+
+Per-class ROC-AUC for `Viral Pneumonia` — the pediatric class:
+
+| Run | Viral Pneumonia ROC-AUC |
+|---|---|
+| `run1_raw` | 0.9983 |
+| `run4_lungs_removed` | **0.9983** |
+| `run3_probe8` (64 pixels) | 0.9840 |
+
+**Identical with and without lungs**, and near-perfect from a 64-pixel thumbnail. A class defined by patient age is separable entirely from body habitus — ribcage proportions, scapular position, chest width — with no lung tissue involved at any point.
+
+This is normally offered as a caveat about the dataset. Here it is a measurement, and it sets the scale for how much of the aggregate number these datasets can manufacture from anatomy that has nothing to do with disease.
+
+### A fourth line of evidence, found before training
 
 De-duplication turned up the same story in the raw data. Of 223 duplicate images removed from the 21,165-image pool:
 
@@ -69,6 +83,12 @@ Full table: [`reports/results.csv`](reports/results.csv) · raw metrics: [`repor
 | `run2_masked` | 0.7228 | 0.4853 | 0.9552 | 0.5181 | 0.0454 | 0.8916 |
 | `run3_probe8` | 0.6417 | 0.5519 | 0.8362 | 0.3071 | 0.0216 | 0.8102 |
 | `run4_lungs_removed` | 0.8288 | 0.6204 | 0.9932 | 0.8985 | 0.0112 | 0.9815 |
+
+### 97.2% is a floor, not a ceiling
+
+`run4_lungs_removed` selected **epoch 15 of 15** — its last. It hit the epoch cap while still improving, and its final Stage B epoch was also its best. The baseline `run1_raw` peaked at epoch 12 and plateaued; `run2_masked` early-stopped at epoch 8 with its best at epoch 3.
+
+So the lungs-erased model is the only one of the three that had not converged when training stopped. Its 97.2% of baseline is a lower bound on what that input can achieve, not an upper one.
 
 ### The headline metric hides the clinical one
 
@@ -115,13 +135,32 @@ The baseline model sits **55% of the way from chance to the ceiling**. Above ran
 
 **Why the ceiling is only 0.376.** Grad-CAM's native resolution here is 7×7; each cell covers a 32×32 pixel block, bilinearly upsampled to 224. Attribution cannot be confined to a lung-shaped region at that granularity. A model seeing nothing but black outside the lungs still "attributes" 62% of its mass there. **LAR is biased downward for every model**, which is why the comparison against a measured ceiling matters more than the absolute value.
 
-This is the weakest of the three findings and is presented as corroboration, not proof. The probe and lungs-erased results are load-bearing.
+This is the weakest of the four findings and is presented as corroboration, not proof. The probe, the lungs-erased result and the Viral Pneumonia AUC are load-bearing.
+
+### The model is least lung-focused exactly where the decision is hard
+
+Breaking LAR out by true class, against each class's own ceiling from `run2_masked`:
+
+| Class | LAR (raw) | Ceiling | Fraction of the way from chance |
+|---|---|---|---|
+| **Lung Opacity** | 0.260 | 0.337 | **22%** |
+| **COVID** | 0.288 | 0.376 | **36%** |
+| Viral Pneumonia | 0.309 | 0.367 | 55% |
+| Normal | 0.356 | 0.401 | 72% |
+
+Floor is 0.238 throughout.
+
+On `Normal` — where the call is easy and the lungs are unambiguously clear — the model is 72% of the way to the ceiling. On the two classes forming the control pair, where the clinically hard discrimination lives, it is at 36% and 22%: barely above a model that ignores the image.
+
+Arrived at by a wholly different route from the pair-AUC result, and pointing the same way.
+
+![Attribution by class](reports/figures/attribution_by_class.png)
 
 ![Grad-CAM panel](reports/figures/gradcam_panel.png)
 
 Original, then `run1_raw` and `run2_masked` attribution. Note the fifth column: a COVID case classified confidently while attention sits on the `D` positioning marker and the neck tubing — **LAR 0.04**. The sixth column attends to the image border, outside the body. Both of the lowest-LAR images carry visible positioning markers, the same shortcut the 8×8 probe detects numerically.
 
-![Attribution by class](reports/figures/attribution_by_class.png)
+**A note on degenerate maps.** Five of 3,142 test images produced an all-zero Grad-CAM for `run1_raw` and are excluded from its mean as `NaN`. This is a genuine property of Grad-CAM on softmax outputs rather than a bug: `∂p_c/∂features` is positive for channels the target class reads but negative for those a competing likely class reads, so ReLU can clip the weighted sum to nothing. All five are Viral Pneumonia images.
 
 ![Failure gallery](reports/figures/failure_gallery.png)
 
@@ -190,6 +229,8 @@ Notebooks in order:
 The second notebook does all three GPU stages in one session. That is deliberate: Kaggle discards `/kaggle/working` when a session ends unless a version is saved, and chaining notebooks through saved outputs is the step most likely to lose three hours of training.
 
 The split manifests are committed, so `01` need not be re-run to reproduce the partition. Choose **T4 over P100** — P100 has no tensor cores, so the `mixed_float16` policy buys nothing there.
+
+Two environment caveats. The `.keras` checkpoints and `run3_probe8.joblib` are gitignored — regenerating them means re-running the training notebook. And the probe was pickled under scikit-learn 1.6.1 on Kaggle; loading it under a different minor version raises `InconsistentVersionWarning`. It loads and predicts correctly, but pickled estimators are not a version-portable format, which is why every number in this README is also written to [`reports/results.json`](reports/results.json).
 
 ---
 
