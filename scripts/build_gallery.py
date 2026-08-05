@@ -175,6 +175,33 @@ def _load_pair(data_root: Path, row) -> tuple[np.ndarray, np.ndarray]:
     return image, (mask > 127).astype(np.float32)
 
 
+def _force_float32(layer) -> None:
+    """Reset a layer and its sublayers to a float32 compute policy.
+
+    These DenseNet121 transfer-learning checkpoints are saved under
+    `mixed_float16` on most of the backbone: float32 weights, float16
+    activations. A plain `model.predict(...)` on the as-loaded model honours
+    that policy and truncates activations to float16 internally. The browser
+    deployment does not have that option — the TF.js conversion pipeline
+    (`to_tf_js_convertion/export.py`) deliberately forces every layer to
+    float32 before export, because tfjs has no float16 tensor dtype. Left
+    unforced here, the manifest's "Keras reference" reflects the lossy
+    mixed-precision path rather than the pure-float32 model that actually
+    ships to the browser — confirmed to disagree by ~5e-3 in probability on
+    at least one gallery image, enough to fail the frontend's parity gate
+    even though nothing is wrong with the exported graph. Forcing float32
+    here makes the reference match what verify-parity.mjs will measure.
+
+    Mutates this layer and its sublayers in place. Must run before the first
+    call/predict on the model — reassigning the policy after a layer has
+    already been built and called does not retroactively change already
+    traced ops.
+    """
+    layer.dtype_policy = "float32"
+    for sub in getattr(layer, "layers", []):
+        _force_float32(sub)
+
+
 def build_gallery(
     selection: list[tuple[str, str]],
     data_root: Path,
@@ -193,6 +220,9 @@ def build_gallery(
         "raw": keras.models.load_model(ckpt_root / "run1_raw_final.keras"),
         "lungs_removed": keras.models.load_model(ckpt_root / "run4_lungs_removed_final.keras"),
     }
+    for model in models.values():
+        for layer in model.layers:
+            _force_float32(layer)
     split = split_feature_and_head(models["raw"])
 
     records = []
