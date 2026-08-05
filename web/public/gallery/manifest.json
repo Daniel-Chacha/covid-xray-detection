@@ -1,0 +1,242 @@
+[
+  {
+    "id": "COVID-1001",
+    "true_class": "COVID",
+    "note": "Lowest-attribution COVID case (LAR ~0.04): Grad-CAM sits on the 'D' scan marker, not the lungs, and both models misclassify it as Lung_Opacity (raw ~80%, lungs-removed ~79%) \u2014 a shortcut that is also wrong.",
+    "lar": 0.03788986874591339,
+    "reference": {
+      "raw": [
+        0.19089029729366302,
+        0.7960886359214783,
+        0.012777791358530521,
+        0.0002432908077025786
+      ],
+      "lungs_removed": [
+        0.17174305021762848,
+        0.790076494216919,
+        0.0368141271173954,
+        0.0013662608107551932
+      ]
+    }
+  },
+  {
+    "id": "COVID-2038",
+    "true_class": "COVID",
+    "note": "High-confidence error: true COVID, raw model predicts Normal at ~99% confidence even though attribution sits mostly inside the lungs (LAR ~0.46).",
+    "lar": 0.46545622575206075,
+    "reference": {
+      "raw": [
+        0.0018367171287536621,
+        0.009193237870931625,
+        0.9889569878578186,
+        1.3072213732812088e-05
+      ],
+      "lungs_removed": [
+        0.034564387053251266,
+        0.10887452960014343,
+        0.8559771180152893,
+        0.0005839948426000774
+      ]
+    }
+  },
+  {
+    "id": "COVID-1264",
+    "true_class": "COVID",
+    "note": "Highest COVID LAR in the set (~0.62): despite heavy attribution inside the lungs, the raw model still misclassifies it as Normal (~79%); the lungs-removed model, using only non-lung anatomy, gets it right (COVID ~95%).",
+    "lar": 0.6196781775244542,
+    "reference": {
+      "raw": [
+        0.18988096714019775,
+        0.02297218330204487,
+        0.787068247795105,
+        7.85907031968236e-05
+      ],
+      "lungs_removed": [
+        0.9481326937675476,
+        0.006531744729727507,
+        0.04485237970948219,
+        0.00048305559903383255
+      ]
+    }
+  },
+  {
+    "id": "Lung_Opacity-449",
+    "true_class": "Lung_Opacity",
+    "note": "Lowest Lung_Opacity LAR in the set (~0.007): the raw model still correctly predicts Lung_Opacity (~62%) from almost no lung attribution, but the lungs-removed model gets it wrong (Normal ~56%) once that cue is erased.",
+    "lar": 0.006859089687231995,
+    "reference": {
+      "raw": [
+        0.003784006694331765,
+        0.6227455139160156,
+        0.36735594272613525,
+        0.006114565767347813
+      ],
+      "lungs_removed": [
+        0.016902711242437363,
+        0.2229411005973816,
+        0.5590473413467407,
+        0.20110884308815002
+      ]
+    }
+  },
+  {
+    "id": "Lung_Opacity-4106",
+    "true_class": "Lung_Opacity",
+    "note": "The single most confident mistake in the test set: true Lung_Opacity, both models predict Normal with near-identical confidence (raw ~99.95%, lungs-removed ~99%).",
+    "lar": 0.34959125257943424,
+    "reference": {
+      "raw": [
+        0.0001982875110115856,
+        0.00031743571162223816,
+        0.9994828701019287,
+        1.3770517170996754e-06
+      ],
+      "lungs_removed": [
+        0.0001177613521576859,
+        0.011279820464551449,
+        0.9886011481285095,
+        1.2932727031511604e-06
+      ]
+    }
+  },
+  {
+    "id": "Lung_Opacity-5949",
+    "true_class": "Lung_Opacity",
+    "note": "Highest Lung_Opacity LAR in the set (~0.50): both models correctly predict Lung_Opacity, though confidence diverges (raw ~96%, lungs-removed ~63%).",
+    "lar": 0.49825360127432716,
+    "reference": {
+      "raw": [
+        9.002970182336867e-05,
+        0.9562159180641174,
+        0.042914219200611115,
+        0.0007797825383022428
+      ],
+      "lungs_removed": [
+        0.0004783522745128721,
+        0.626327633857727,
+        0.3731301724910736,
+        6.384566222550347e-05
+      ]
+    }
+  },
+  {
+    "id": "Normal-9497",
+    "true_class": "Normal",
+    "note": "Lowest Normal LAR in the set (~0.007): both models misclassify it as Lung_Opacity with closely matching confidence (raw ~87%, lungs-removed ~89%).",
+    "lar": 0.007171507468008777,
+    "reference": {
+      "raw": [
+        0.0004899080377072096,
+        0.8693117499351501,
+        0.13018670678138733,
+        1.1732349776139017e-05
+      ],
+      "lungs_removed": [
+        5.821252125315368e-05,
+        0.893757700920105,
+        0.10616231709718704,
+        2.1688691049348563e-05
+      ]
+    }
+  },
+  {
+    "id": "Normal-832",
+    "true_class": "Normal",
+    "note": "High-confidence error with near-identical agreement: true Normal, both models predict Viral Pneumonia at ~99% confidence (raw and lungs-removed differ by well under 1 point).",
+    "lar": 0.2655175050298572,
+    "reference": {
+      "raw": [
+        0.00027212302666157484,
+        0.0003266179992351681,
+        0.0072687240317463875,
+        0.9921326041221619
+      ],
+      "lungs_removed": [
+        0.0005434899940155447,
+        0.0008670190582051873,
+        0.008459372445940971,
+        0.9901301264762878
+      ]
+    }
+  },
+  {
+    "id": "Normal-3209",
+    "true_class": "Normal",
+    "note": "Highest Normal LAR in the set (~0.60): both models correctly predict Normal in close agreement (raw ~83%, lungs-removed ~86%).",
+    "lar": 0.6018281799282347,
+    "reference": {
+      "raw": [
+        0.004708597902208567,
+        0.16276046633720398,
+        0.832473874092102,
+        5.7017517974600196e-05
+      ],
+      "lungs_removed": [
+        0.08084307610988617,
+        0.05817444622516632,
+        0.8609367609024048,
+        4.562485992209986e-05
+      ]
+    }
+  },
+  {
+    "id": "Viral Pneumonia-1283",
+    "true_class": "Viral Pneumonia",
+    "note": "Lowest Viral Pneumonia LAR in the set (~0.075): the raw model barely guesses Normal (~54%, close to chance) while the lungs-removed model, from non-lung anatomy alone, correctly predicts Viral Pneumonia (~79%).",
+    "lar": 0.07617593013898916,
+    "reference": {
+      "raw": [
+        0.009216413833200932,
+        0.0021815195214003325,
+        0.5438553094863892,
+        0.4447467029094696
+      ],
+      "lungs_removed": [
+        0.008586355485022068,
+        0.0038987910374999046,
+        0.19509151577949524,
+        0.7924233675003052
+      ]
+    }
+  },
+  {
+    "id": "Viral Pneumonia-668",
+    "true_class": "Viral Pneumonia",
+    "note": "True Viral Pneumonia, low LAR (~0.15): both models agree closely but share the same mistake, predicting Normal (raw ~91%, lungs-removed ~93%).",
+    "lar": 0.14763299943977634,
+    "reference": {
+      "raw": [
+        0.0005654251435771585,
+        0.0008322156500071287,
+        0.9074985384941101,
+        0.09110384434461594
+      ],
+      "lungs_removed": [
+        0.0007938391645438969,
+        0.0010957649210467935,
+        0.9339521527290344,
+        0.06415820866823196
+      ]
+    }
+  },
+  {
+    "id": "Viral Pneumonia-422",
+    "true_class": "Viral Pneumonia",
+    "note": "Highest Viral Pneumonia LAR in the set (~0.54): both models correctly predict Viral Pneumonia in close agreement (raw ~99%, lungs-removed ~98%).",
+    "lar": 0.5404251175905779,
+    "reference": {
+      "raw": [
+        0.0036323729436844587,
+        0.0005520389531739056,
+        0.009146776050329208,
+        0.9866688251495361
+      ],
+      "lungs_removed": [
+        0.016588885337114334,
+        0.0007594546768814325,
+        0.0037583778612315655,
+        0.9788932204246521
+      ]
+    }
+  }
+]
