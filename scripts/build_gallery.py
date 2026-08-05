@@ -12,6 +12,7 @@ on, silently and with no error.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -34,14 +35,15 @@ SELECTION: list[tuple[str, str]] = [
     # --- COVID ---
     (
         "COVID-1001",
-        "Lowest-attribution COVID case (LAR ~0.04): Grad-CAM sits on the 'D' "
-        "scan marker, not the lungs, and both models misclassify it as "
+        "Lowest-attribution COVID case (LAR ~0.04): Grad-CAM's peak (1.0) sits on "
+        "lead-wire artefacts in the lower abdomen, not the lungs, with secondary "
+        "weight (up to 0.78) on the 'D' scan marker; both models misclassify it as "
         "Lung_Opacity (raw ~80%, lungs-removed ~79%) — a shortcut that is also wrong.",
     ),
     (
         "COVID-2038",
         "High-confidence error: true COVID, raw model predicts Normal at ~99% "
-        "confidence even though attribution sits mostly inside the lungs (LAR ~0.46).",
+        "confidence even though attribution reaches well inside the lungs (LAR ~0.46).",
     ),
     (
         "COVID-1264",
@@ -104,6 +106,22 @@ SELECTION: list[tuple[str, str]] = [
 ]
 
 
+_UNSAFE_ID_CHARS = re.compile(r"[^A-Za-z0-9_-]")
+
+
+def sanitize_id(image_id: str) -> str:
+    """Make an id safe to use as both a manifest field and a URL/filesystem path segment.
+
+    Test-manifest stems carry a literal space in "Viral Pneumonia-*" (CLASS_NAMES
+    keeps the dataset's space in that class name). A browser <img src> usually
+    copes with that, but S3/CDN sync and tar/zip round-trips do not reliably.
+    This is the single place that decides both the on-disk directory name and
+    the manifest "id", so replacing disallowed characters here keeps the two
+    in agreement by construction.
+    """
+    return _UNSAFE_ID_CHARS.sub("_", image_id)
+
+
 def save_224(array: np.ndarray, path: Path) -> None:
     """Write a uint8 array as a 224x224 PNG, resizing only if needed."""
     image = Image.fromarray(np.asarray(array, dtype=np.uint8))
@@ -121,9 +139,18 @@ def manifest_record(
     raw_probs: np.ndarray,
     lungs_removed_probs: np.ndarray,
 ) -> dict:
-    """One manifest entry. Raises if the class is not one of the canonical four."""
+    """One manifest entry. Raises if the class is not one of the canonical four,
+    or if either probability vector doesn't have one entry per class — a
+    mismatch would silently misalign a probability with the wrong class index
+    everywhere the frontend reads `reference`."""
     if true_class not in CLASS_NAMES:
         raise ValueError(f"unknown class {true_class!r}; expected one of {CLASS_NAMES}")
+    if len(raw_probs) != len(CLASS_NAMES) or len(lungs_removed_probs) != len(CLASS_NAMES):
+        raise ValueError(
+            f"expected {len(CLASS_NAMES)} probabilities per variant (one per class in "
+            f"{CLASS_NAMES}), got {len(raw_probs)} (raw) and {len(lungs_removed_probs)} "
+            "(lungs_removed)"
+        )
 
     return {
         "id": image_id,
@@ -170,7 +197,12 @@ def build_gallery(
 
     records = []
     for image_id, note in selection:
+        # `image_id` (the test-manifest file stem, which may carry a space —
+        # see CLASS_NAMES's "Viral Pneumonia") is only used to look the row up.
+        # `out_id` is what gets written as the directory name and the manifest
+        # "id", so the two can never disagree.
         row = by_stem[image_id]
+        out_id = sanitize_id(image_id)
         image, mask = _load_pair(data_root, row)
 
         # apply_variant is the single owner of what "lungs_removed" means —
@@ -185,7 +217,7 @@ def build_gallery(
             "lungs_erased": lungs_erased,
         }
         for name, pixels in variants.items():
-            save_224(pixels, out_dir / image_id / f"{name}.png")
+            save_224(pixels, out_dir / out_id / f"{name}.png")
 
         probs = {}
         for variant, source in (("raw", "raw"), ("lungs_removed", "lungs_erased")):
@@ -201,11 +233,11 @@ def build_gallery(
             ),
             split=split,
         )[0]
-        save_224(_overlay(image, heatmap), out_dir / image_id / "gradcam.png")
+        save_224(_overlay(image, heatmap), out_dir / out_id / "gradcam.png")
 
         records.append(
             manifest_record(
-                image_id=image_id,
+                image_id=out_id,
                 true_class=row["class_name"],
                 note=note,
                 lar=lung_attribution_ratio(heatmap, mask * 255.0),

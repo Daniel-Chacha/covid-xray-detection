@@ -2,7 +2,7 @@
   {
     "id": "COVID-1001",
     "true_class": "COVID",
-    "note": "Lowest-attribution COVID case (LAR ~0.04): Grad-CAM sits on the 'D' scan marker, not the lungs, and both models misclassify it as Lung_Opacity (raw ~80%, lungs-removed ~79%) \u2014 a shortcut that is also wrong.",
+    "note": "Lowest-attribution COVID case (LAR ~0.04): Grad-CAM's peak (1.0) sits on lead-wire artefacts in the lower abdomen, not the lungs, with secondary weight (up to 0.78) on the 'D' scan marker; both models misclassify it as Lung_Opacity (raw ~80%, lungs-removed ~79%) \u2014 a shortcut that is also wrong.",
     "lar": 0.03788986874591339,
     "reference": {
       "raw": [
@@ -22,7 +22,7 @@
   {
     "id": "COVID-2038",
     "true_class": "COVID",
-    "note": "High-confidence error: true COVID, raw model predicts Normal at ~99% confidence even though attribution sits mostly inside the lungs (LAR ~0.46).",
+    "note": "High-confidence error: true COVID, raw model predicts Normal at ~99% confidence even though attribution reaches well inside the lungs (LAR ~0.46).",
     "lar": 0.46545622575206075,
     "reference": {
       "raw": [
@@ -180,7 +180,7 @@
     }
   },
   {
-    "id": "Viral Pneumonia-1283",
+    "id": "Viral_Pneumonia-1283",
     "true_class": "Viral Pneumonia",
     "note": "Lowest Viral Pneumonia LAR in the set (~0.075): the raw model barely guesses Normal (~54%, close to chance) while the lungs-removed model, from non-lung anatomy alone, correctly predicts Viral Pneumonia (~79%).",
     "lar": 0.07617593013898916,
@@ -200,7 +200,7 @@
     }
   },
   {
-    "id": "Viral Pneumonia-668",
+    "id": "Viral_Pneumonia-668",
     "true_class": "Viral Pneumonia",
     "note": "True Viral Pneumonia, low LAR (~0.15): both models agree closely but share the same mistake, predicting Normal (raw ~91%, lungs-removed ~93%).",
     "lar": 0.14763299943977634,
@@ -220,7 +220,7 @@
     }
   },
   {
-    "id": "Viral Pneumonia-422",
+    "id": "Viral_Pneumonia-422",
     "true_class": "Viral Pneumonia",
     "note": "Highest Viral Pneumonia LAR in the set (~0.54): both models correctly predict Viral Pneumonia in close agreement (raw ~99%, lungs-removed ~98%).",
     "lar": 0.5404251175905779,
