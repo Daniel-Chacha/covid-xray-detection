@@ -10,6 +10,16 @@ This repository is the measurement, not the classifier.
 
 ---
 
+## Check the claim in a browser
+
+**Live demo: `https://REPLACE-WITH-DEPLOY-URL`** — nothing is published yet; this repository ships the demo, not a deployment. Build and host it yourself with the one command in [`web/README.md`](web/README.md#deploying), then replace this URL.
+
+Twelve held-out test radiographs. Both models — full image and lungs erased — run in your own browser through TensorFlow.js. **Nothing is uploaded, and there is nothing to upload with:** the images ship with the page, and no upload path exists.
+
+The figure it leads with is **agreement, not accuracy**: on **9 of the 12**, erasing the lung fields entirely leaves the model's top answer unchanged. Those twelve are fixed and hand-picked to make that argument. They are not a random sample and not a measure of accuracy — whether the model happens to be right about any one of them is beside the point.
+
+---
+
 ## The finding
 
 Four models, one code path, differing only in what the input contains. All figures are on the frozen test set, read once.
@@ -158,7 +168,7 @@ Arrived at by a wholly different route from the pair-AUC result, and pointing th
 
 ![Grad-CAM panel](reports/figures/gradcam_panel.png)
 
-Original, then `run1_raw` and `run2_masked` attribution. Note the fifth column: a COVID case classified confidently while attention sits on the `D` positioning marker and the neck tubing — **LAR 0.04**. The sixth column attends to the image border, outside the body. Both of the lowest-LAR images carry visible positioning markers, the same shortcut the 8×8 probe detects numerically.
+Original, then `run1_raw` and `run2_masked` attribution. Note the fifth column (`COVID-1001`): a COVID case the raw model calls `Lung_Opacity` at 80% confidence, at **LAR 0.04**. Read off the array rather than the blended overlay — a jet colourmap at 45% alpha washes out over a bright abdomen — its peak (1.0) sits on lead-wire artefacts in the lower abdomen, with secondary weight (up to 0.78) on the `D` scan marker. Neither is lung. The sixth column (`COVID-1012`) is another COVID case the raw model also calls `Lung_Opacity`, at **LAR 0.12**: its single hottest cell does fall inside the lung field, but 88% of the attribution mass does not. Both of the two lowest-LAR columns carry a visible `D` positioning marker, the same class of acquisition cue the 8×8 probe detects numerically.
 
 **A note on degenerate maps.** Five of 3,142 test images produced an all-zero Grad-CAM for `run1_raw` and are excluded from its mean as `NaN`. This is a genuine property of Grad-CAM on softmax outputs rather than a bug: `∂p_c/∂features` is positive for channels the target class reads but negative for those a competing likely class reads, so ReLU can clip the weighted sum to nothing. All five are Viral Pneumonia images.
 
@@ -210,7 +220,7 @@ git clone https://github.com/Daniel-Chacha/covid-xray-detection.git
 cd covid-xray-detection
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-python -m pytest -v          # 81 tests
+python -m pytest -v          # 90 tests
 ```
 
 Fetch the dataset:
@@ -249,7 +259,7 @@ src/covid_xray/
 └── gradcam.py     # Grad-CAM, Lung Attribution Ratio
 ```
 
-81 tests. Notebooks hold orchestration and figures only.
+90 tests. Notebooks hold orchestration and figures only.
 
 ---
 
