@@ -74,7 +74,14 @@ let backendPromise: Promise<string> | null = null
  */
 export function activeBackend(): Promise<string> {
   if (backendPromise === null) {
-    backendPromise = initBackend()
+    const pending = initBackend()
+    // Never cache a rejection permanently. loadModel chains on this, so a
+    // poisoned backend promise would be handed to every future load and would
+    // defeat the cache eviction above — a retry could never succeed.
+    pending.catch(() => {
+      if (backendPromise === pending) backendPromise = null
+    })
+    backendPromise = pending
   }
   return backendPromise
 }

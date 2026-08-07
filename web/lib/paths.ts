@@ -14,15 +14,36 @@
  *
  * To deploy under a sub-path, set ONE value — the `NEXT_PUBLIC_BASE_PATH`
  * environment variable at build time — and have `next.config.ts` derive
- * `basePath` from the same variable:
+ * `basePath` from it THROUGH `normalizeBasePath`, so both agree exactly:
  *
- *   const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? ''
- *   const nextConfig: NextConfig = { basePath, output: 'export', ... }
+ *   import { normalizeBasePath } from './lib/paths'
+ *   const nextConfig: NextConfig = {
+ *     basePath: normalizeBasePath(process.env.NEXT_PUBLIC_BASE_PATH),
+ *     output: 'export',
+ *     images: { unoptimized: true },
+ *   }
+ *
+ * Passing the raw env var to `basePath` is NOT safe: Next validates it and
+ * hard-errors on a missing leading slash (`next/dist/server/config.js`, error
+ * E105) and on a trailing slash (E39). `normalizeBasePath` returns a value that
+ * satisfies both rules, so the loose inputs it tolerates here cannot produce a
+ * build that fails there.
  *
  * `NEXT_PUBLIC_`-prefixed variables are inlined into the client bundle at build
- * time, so this constant is a literal by the time it reaches the browser.
+ * time, so `BASE_PATH` is a literal by the time it reaches the browser.
  */
-export const BASE_PATH = (process.env.NEXT_PUBLIC_BASE_PATH ?? '').replace(/\/+$/, '')
+
+/**
+ * Coerce a base-path env var into the exact form Next's `basePath` requires:
+ * either an empty string, or a leading slash with no trailing slash.
+ */
+export function normalizeBasePath(value: string | undefined): string {
+  const trimmed = (value ?? '').trim().replace(/\/+$/, '')
+  if (trimmed === '') return ''
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+}
+
+export const BASE_PATH = normalizeBasePath(process.env.NEXT_PUBLIC_BASE_PATH)
 
 /** Resolve a root-relative `public/` path against the deploy's base path. */
 export function assetPath(path: string): string {
