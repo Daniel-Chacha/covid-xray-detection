@@ -13,14 +13,20 @@ interface Props {
 }
 
 export default function Gallery({ items, selectedId, onSelect }: Props) {
-  const groupRef = useRef<HTMLDivElement>(null)
+  // Keyboard navigation focuses tiles through these refs rather than by
+  // querying `[data-testid]`. A test hook must not be load-bearing for
+  // production behaviour — deleting it should break a test, loudly, not arrow
+  // keys, silently.
+  const tileRefs = useRef<(HTMLButtonElement | null)[]>([])
 
-  // Never -1. With no match every tile would get tabIndex -1 and the whole
-  // gallery would drop out of the tab order.
-  const activeIndex = Math.max(
-    0,
-    items.findIndex((item) => item.id === selectedId),
-  )
+  const matchedIndex = items.findIndex((item) => item.id === selectedId)
+
+  // The roving tab stop needs a tile even when nothing matches, or every tile
+  // gets tabIndex -1 and the gallery drops out of the tab order entirely. This
+  // is deliberately NOT the same thing as being selected: an unmatched id must
+  // leave every tile unchecked rather than silently checking tile 0 while the
+  // viewer shows something else.
+  const tabStopIndex = matchedIndex < 0 ? 0 : matchedIndex
 
   /**
    * Move selection and focus together.
@@ -31,9 +37,7 @@ export default function Gallery({ items, selectedId, onSelect }: Props) {
   function focusAt(index: number) {
     const bounded = (index + items.length) % items.length
     onSelect(items[bounded].id)
-    groupRef.current?.querySelectorAll<HTMLButtonElement>('[data-testid="gallery-tile"]')[
-      bounded
-    ]?.focus()
+    tileRefs.current[bounded]?.focus()
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
@@ -41,11 +45,11 @@ export default function Gallery({ items, selectedId, onSelect }: Props) {
     switch (event.key) {
       case 'ArrowRight':
       case 'ArrowDown':
-        target = activeIndex + 1
+        target = tabStopIndex + 1
         break
       case 'ArrowLeft':
       case 'ArrowUp':
-        target = activeIndex - 1
+        target = tabStopIndex - 1
         break
       case 'Home':
         target = 0
@@ -66,7 +70,7 @@ export default function Gallery({ items, selectedId, onSelect }: Props) {
         id="gallery-heading"
         className="text-xs font-semibold uppercase tracking-wide text-neutral-400"
       >
-        Twelve hand-picked test-set radiographs
+        {items.length} hand-picked test-set radiographs
       </h2>
 
       {/*
@@ -81,7 +85,6 @@ export default function Gallery({ items, selectedId, onSelect }: Props) {
         working tab stops traded for a label that lies.
       */}
       <div
-        ref={groupRef}
         role="radiogroup"
         aria-labelledby="gallery-heading"
         onKeyDown={onKeyDown}
@@ -89,17 +92,20 @@ export default function Gallery({ items, selectedId, onSelect }: Props) {
       >
         {items.map((item, index) => {
           const label = item.true_class.replace('_', ' ')
-          const selected = index === activeIndex
+          const selected = item.id === selectedId
           return (
             <button
               key={item.id}
+              ref={(node) => {
+                tileRefs.current[index] = node
+              }}
               type="button"
               role="radio"
               onClick={() => onSelect(item.id)}
               aria-checked={selected}
               aria-label={`${label} — ${item.id}`}
               title={`${label} — ${item.id}`}
-              tabIndex={selected ? 0 : -1}
+              tabIndex={index === tabStopIndex ? 0 : -1}
               data-testid="gallery-tile"
               data-item-id={item.id}
               className={`group overflow-hidden rounded border-2 text-left transition ${
