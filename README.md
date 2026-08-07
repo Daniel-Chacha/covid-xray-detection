@@ -2,7 +2,7 @@
 
 A DenseNet121 classifier reaches **0.852 macro-F1** on a held-out test set of 3,142 chest radiographs, separating COVID-19 from Lung Opacity, Normal and Viral Pneumonia. That number is close to what a great many published notebooks report on this dataset.
 
-**It is largely an artefact.** Blacking out the lungs entirely costs it 3% of that score. A multinomial logistic regression on a **64-pixel thumbnail** recovers three quarters of it. On the clinically meaningful comparison — COVID versus another adult lung opacity — the lungs-erased model performs *marginally better* than the model that can see them.
+**It is largely an artefact.** Blacking out the lungs entirely costs it 3% of that score. A multinomial logistic regression on a **64-pixel thumbnail** recovers three quarters of it. On the clinically meaningful comparison — COVID versus another adult lung opacity — erasing the lungs does not measurably hurt it at all.
 
 This repository is the measurement, not the classifier.
 
