@@ -20,14 +20,14 @@
 }
 
 /*
- * create-next-app shipped `background`/`color` here. That rule is *unlayered*,
- * so it outranks every Tailwind v4 utility (which live in `@layer utilities`)
- * regardless of specificity, and it silently killed the dark page background
- * set on <body> in app/layout.tsx. Colours are now owned by the layout's
- * utility classes; `--background`/`--foreground` stay defined because
- * `@theme inline` above maps them to the `bg-background`/`text-foreground`
- * utilities.
+ * create-next-app shipped `background`, `color` and `font-family` in an
+ * unlayered `body` rule here. Unlayered CSS outranks every Tailwind v4 utility
+ * (which live in `@layer utilities`) regardless of specificity, so that rule
+ * silently killed both the dark background set on <body> in app/layout.tsx and
+ * the Geist fonts wired up there — the page shipped eight woff2 files and then
+ * rendered in Arial. The whole rule is therefore gone: colours and typeface are
+ * owned by the layout's utility classes.
+ *
+ * `--background`/`--foreground` stay defined because `@theme inline` above maps
+ * them to the `bg-foreground`/`text-background` utilities.
  */
-body {
-  font-family: Arial, Helvetica, sans-serif;
-}
