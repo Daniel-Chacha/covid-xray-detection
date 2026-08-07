@@ -35,10 +35,15 @@ SELECTION: list[tuple[str, str]] = [
     # --- COVID ---
     (
         "COVID-1001",
-        "Lowest-attribution COVID case (LAR ~0.04): Grad-CAM's peak (1.0) sits on "
-        "lead-wire artefacts in the lower abdomen, not the lungs, with secondary "
-        "weight (up to 0.78) on the 'D' scan marker; both models misclassify it as "
-        "Lung_Opacity (raw ~80%, lungs-removed ~79%) — a shortcut that is also wrong.",
+        # NOT the lowest-LAR COVID image: it ranks 7th of 511, and six are lower.
+        # It is here because the D marker makes the shortcut legible, which is a
+        # curatorial reason, not a measurement. Say that rather than implying an
+        # extreme.
+        "A very low-attribution COVID case (LAR ~0.04, 7th lowest of 511 COVID test "
+        "images): Grad-CAM's peak (1.0) sits on lead-wire artefacts in the lower "
+        "abdomen, not the lungs, with secondary weight (up to 0.78) on the 'D' scan "
+        "marker; both models misclassify it as Lung_Opacity (raw ~80%, lungs-removed "
+        "~79%) — a shortcut that is also wrong.",
     ),
     (
         "COVID-2038",
@@ -66,8 +71,13 @@ SELECTION: list[tuple[str, str]] = [
     ),
     (
         "Lung_Opacity-5949",
-        "Highest Lung_Opacity LAR in the set (~0.50): both models correctly "
-        "predict Lung_Opacity, though confidence diverges (raw ~96%, lungs-removed ~63%).",
+        # NOT the highest Lung_Opacity LAR outright — 19 of 902 are higher, up to
+        # 0.6029. The qualifier is load-bearing and was dropped from an earlier
+        # draft: run1_raw misclassifies every one of those 19.
+        "Highest Lung_Opacity LAR among the images the raw model gets right (~0.50); "
+        "19 of 902 score higher and the raw model misclassifies every one of them. "
+        "Both models predict Lung_Opacity correctly here, though confidence diverges "
+        "(raw ~96%, lungs-removed ~63%).",
     ),
     # --- Normal ---
     (
