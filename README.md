@@ -257,6 +257,14 @@ src/covid_xray/
 ├── train.py       # two-stage loop, macro-F1 selection
 ├── evaluate.py    # metrics, bootstrap CIs, control-pair analysis
 └── gradcam.py     # Grad-CAM, Lung Attribution Ratio
+
+scripts/
+└── build_gallery.py   # renders the browser demo's 12 items and their manifest
+
+web/                   # the browser demo — see web/README.md
+├── lib/               # TF.js model loading and inference
+├── components/        # gallery, viewer, prediction bars
+└── scripts/verify-parity.mjs   # exported graphs vs the Keras reference
 ```
 
 90 tests. Notebooks hold orchestration and figures only.

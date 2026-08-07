@@ -161,9 +161,9 @@ page names the one it got. Driven under Chromium 148 on the twelve images × two
 | WebGL — `ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)` | 3.1e-6 |
 | CPU — `tfjs-node`, what `npm run verify-parity` measures | 2.44e-6 |
 
-Zero argmax flips on either driver. GPU float32 and CPU float32 land within a rounding error of
-each other, three orders of magnitude inside the 2e-3 tolerance, so the parity numbers a visitor
-sees are the same numbers the gate checks.
+Zero argmax flips on either driver. The GPU and CPU numbers are not identical — 2.9e-6 against
+2.44e-6 is a ~19% difference — but both sit roughly 700× inside the 2e-3 tolerance, so the gate's
+verdict does not depend on which backend a visitor gets.
 
 ---
 
