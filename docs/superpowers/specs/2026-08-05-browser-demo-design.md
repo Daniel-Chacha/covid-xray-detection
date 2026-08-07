@@ -10,7 +10,7 @@
 
 Make the project's central claim checkable rather than assertable.
 
-[The audit](2026-07-30-covid-cxr-detection-design.md) established that erasing the lungs costs the classifier only 3% of its macro-F1, and that on the COVID vs. Lung Opacity control pair the lungs-erased model scores marginally *higher*. That is a number in a table. This demo lets a reader select a radiograph, toggle the lungs off, and watch the prediction hold — the same finding, arrived at by clicking.
+[The audit](2026-07-30-covid-cxr-detection-design.md) established that erasing the lungs costs the classifier only 3% of its macro-F1, and that on the COVID vs. Lung Opacity control pair erasing the lungs does not measurably hurt it at all. (Corrected 2026-08-07: this section previously said the lungs-erased model scores marginally *higher*. The 0.0018 gap is roughly a third of the AUC's bootstrap CI half-width, so it supports no direction.) That is a number in a table. This demo lets a reader select a radiograph, toggle the lungs off, and watch the prediction hold — the same finding, arrived at by clicking.
 
 The headline is therefore the **agreement** between the two models, not the accuracy of either.
 
