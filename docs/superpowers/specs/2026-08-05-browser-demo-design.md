@@ -157,13 +157,14 @@ web/
 ├── lib/
 │   ├── model.ts           # load and cache both GraphModels
 │   ├── infer.ts           # pixels -> probabilities
+│   ├── paths.ts           # base-path-aware asset URLs
 │   └── types.ts           # manifest record types
 ├── public/
 │   ├── models/raw/…
 │   ├── models/lungs_removed/…
 │   └── gallery/…
 ├── scripts/verify-parity.mjs
-└── next.config.mjs        # output: 'export'
+└── next.config.ts         # output: 'export'
 ```
 
 Each module has one job: `model.ts` turns a name into a loaded model, `infer.ts` turns an image element into probabilities, `Predictions.tsx` turns probabilities into bars. None needs to read another's internals.
@@ -188,9 +189,11 @@ The conversion README's central warning is that a preprocessing mismatch produce
 
 ## 6. Failure handling
 
-Because `manifest.json` already carries reference probabilities, **the page degrades to a static results browser**: if TensorFlow.js fails to load, or WebGL is unavailable and the WASM fallback also fails, the gallery remains browsable and every number is still displayed, behind a banner explaining that live inference is unavailable.
+Because `manifest.json` already carries reference probabilities, **the page degrades to a static results browser**: if TensorFlow.js fails to load, or neither backend can be initialised, the gallery remains browsable and every number is still displayed, behind a banner explaining that live inference is unavailable.
 
-The active TF.js backend (WebGL, WASM or CPU) is displayed, since it explains order-of-magnitude latency differences between visitors.
+The active TF.js backend is displayed, since it explains order-of-magnitude latency differences between visitors.
+
+**Corrected 2026-08-07.** This section originally promised a WASM fallback. `@tensorflow/tfjs` bundles **CPU and WebGL only** — WASM lives in a separate `@tensorflow/tfjs-backend-wasm` package, which was deliberately not added. The real chain is **WebGL, falling back to CPU**, and total failure is covered by the static-results degradation above, so nothing is lost.
 
 A model that fails to load is reported inline rather than silently yielding no prediction.
 
