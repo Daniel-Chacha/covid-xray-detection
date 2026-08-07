@@ -1,69 +1,183 @@
-import Image from "next/image";
+'use client'
 
-export default function Home() {
+import { useEffect, useState } from 'react'
+import Gallery from '@/components/Gallery'
+import Viewer from '@/components/Viewer'
+import { argmax } from '@/lib/infer'
+import { activeBackend } from '@/lib/model'
+import { assetPath } from '@/lib/paths'
+import type { GalleryItem } from '@/lib/types'
+
+const MANIFEST_URL = assetPath('/gallery/manifest.json')
+
+/**
+ * Enough validation to turn a wrong deploy into a message instead of a crash.
+ *
+ * A sub-path host that serves its 404 page with a 200 would otherwise reach
+ * `records[0].reference[variant]` and throw inside render.
+ */
+function parseManifest(payload: unknown): GalleryItem[] {
+  if (!Array.isArray(payload) || payload.length === 0) {
+    throw new Error('the manifest did not contain a non-empty array of gallery records.')
+  }
+  for (const record of payload) {
+    const item = record as Partial<GalleryItem>
+    if (
+      typeof item?.id !== 'string' ||
+      !Array.isArray(item?.reference?.raw) ||
+      !Array.isArray(item?.reference?.lungs_removed)
+    ) {
+      throw new Error('a manifest record is missing its id or its reference probabilities.')
+    }
+  }
+  return payload as GalleryItem[]
+}
+
+export default function Page() {
+  const [items, setItems] = useState<GalleryItem[]>([])
+  const [selectedId, setSelectedId] = useState<string>('')
+  const [backend, setBackend] = useState<string>('')
+  const [manifestError, setManifestError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    // The plan had neither a `.catch` nor a `response.ok` check here, so a 404
+    // — the likeliest outcome of a sub-path deploy — left the page reading
+    // "Loading gallery…" forever. Design section 6 requires visible
+    // degradation, not a hang.
+    fetch(MANIFEST_URL)
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`the server answered ${response.status} ${response.statusText}.`)
+        }
+        return parseManifest(await response.json())
+      })
+      .then((records) => {
+        if (cancelled) return
+        setItems(records)
+        setSelectedId(records[0].id)
+      })
+      .catch((cause: unknown) => {
+        if (cancelled) return
+        setManifestError(cause instanceof Error ? cause.message : String(cause))
+      })
+
+    activeBackend().then(
+      (name) => {
+        if (!cancelled) setBackend(name)
+      },
+      () => {
+        if (!cancelled) setBackend('unavailable')
+      },
+    )
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const selected = items.find((item) => item.id === selectedId)
+
+  // The prominent number, per design section 8: agreement between the two
+  // models, not accuracy. Counted from the manifest rather than hardcoded, so
+  // it cannot drift away from the images actually shipped.
+  const unchanged = items.filter(
+    (item) => argmax(item.reference.raw) === argmax(item.reference.lungs_removed),
+  ).length
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+    <main className="mx-auto w-full max-w-5xl space-y-10 px-4 py-10">
+      <header className="space-y-5">
+        <h1 className="text-3xl font-semibold tracking-tight">
+          How much of this COVID classifier is real?
+        </h1>
+        <p className="max-w-2xl text-neutral-300">
+          Two DenseNet121 models run in your browser on the same radiograph — one trained on the
+          full image, one trained with the lung fields erased to black. Toggle between them. The
+          prediction mostly does not move, because the classifier is reading how the image was
+          acquired rather than what is inside the chest.
+        </p>
+
+        <dl className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-lg border border-sky-400/30 bg-sky-950/20 p-4">
+            <dt className="text-xs uppercase tracking-wide text-sky-200/70">
+              The two models agree
+            </dt>
+            <dd className="mt-1 text-3xl font-semibold tabular-nums text-sky-200">
+              {items.length > 0 ? `${unchanged} of ${items.length}` : '—'}
+            </dd>
+            <dd className="mt-1 text-xs text-neutral-400">
+              images below where erasing the lungs entirely leaves the top answer unchanged
+            </dd>
+          </div>
+          <div className="rounded-lg border border-neutral-800 p-4">
+            <dt className="text-xs uppercase tracking-wide text-neutral-500">
+              Held-out test set, 3,142 images
+            </dt>
+            <dd className="mt-1 text-3xl font-semibold tabular-nums text-neutral-200">97.2%</dd>
+            <dd className="mt-1 text-xs text-neutral-400">
+              of the full-image model&rsquo;s macro-F1 survives erasing the lungs (0.8288 vs.
+              0.8523)
+            </dd>
+          </div>
+          <div className="rounded-lg border border-neutral-800 p-4">
+            <dt className="text-xs uppercase tracking-wide text-neutral-500">
+              COVID vs. Lung Opacity
+            </dt>
+            <dd className="mt-1 text-3xl font-semibold tabular-nums text-neutral-200">
+              0.9815 / 0.9797
+            </dd>
+            <dd className="mt-1 text-xs text-neutral-400">
+              pair AUC without lungs / with lungs — on the comparison that matters clinically,
+              erasing them helps slightly
+            </dd>
+          </div>
+        </dl>
+
+        <div className="max-w-3xl space-y-2 text-xs text-neutral-500">
+          <p>
+            These twelve test-set images were <strong className="text-neutral-400">hand-picked</strong>{' '}
+            to make that argument. They are not a random sample and nothing here is a measure of
+            accuracy — whether the model happens to be right about any one of them is beside the
+            point. The accuracy figure it does have on the full test set, 0.852 macro-F1, is the
+            artefact under examination, not a result to be impressed by.
+          </p>
+          <p>
+            Nothing is uploaded, and there is nothing to upload with: the twelve radiographs ship
+            with the page and both models run entirely on your device
+            {backend && ` (TensorFlow.js, ${backend} backend)`}.
           </p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </header>
+
+      {items.length > 0 && (
+        <Gallery items={items} selectedId={selectedId} onSelect={setSelectedId} />
+      )}
+
+      {selected ? (
+        <Viewer key={selected.id} item={selected} />
+      ) : manifestError ? (
+        <div
+          role="alert"
+          data-testid="manifest-error"
+          className="rounded-lg border border-amber-600/40 bg-amber-950/40 px-4 py-3 text-sm text-amber-100"
+        >
+          <p className="font-semibold">The gallery could not be loaded.</p>
+          <p className="mt-1 text-amber-200/90">
+            Fetching <code className="font-mono text-xs">{MANIFEST_URL}</code> failed:{' '}
+            {manifestError}
+          </p>
+          <p className="mt-2 text-xs text-amber-200/70">
+            If this build is served from a sub-path, it must be built with{' '}
+            <code className="font-mono">NEXT_PUBLIC_BASE_PATH</code> set to that prefix. Without the
+            manifest there are no images and no reference probabilities, so the page has nothing to
+            show.
+          </p>
         </div>
-      </main>
-    </div>
-  );
+      ) : (
+        <p className="text-neutral-500">Loading gallery…</p>
+      )}
+    </main>
+  )
 }
