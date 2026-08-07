@@ -111,33 +111,55 @@ export default function Page() {
               images below where erasing the lungs entirely leaves the top answer unchanged
             </dd>
           </div>
+          {/*
+            The <dt> names the MEASURED QUANTITY, not the dataset. It read
+            "Held-out test set, 3,142 images" over a 97.2% in 30px type, so a
+            skim produced "97.2% on 3,142 held-out images" — an accuracy
+            headline, and precisely the misreading design section 9 warns
+            about. The number is a retention ratio and now says so before the
+            eye reaches it.
+          */}
           <div className="rounded-lg border border-neutral-800 p-4">
-            <dt className="text-xs uppercase tracking-wide text-neutral-500">
-              Held-out test set, 3,142 images
+            <dt className="text-xs uppercase tracking-wide text-neutral-400">
+              Macro-F1 retained without lungs
             </dt>
             <dd className="mt-1 text-3xl font-semibold tabular-nums text-neutral-200">97.2%</dd>
             <dd className="mt-1 text-xs text-neutral-400">
-              of the full-image model&rsquo;s macro-F1 survives erasing the lungs (0.8288 vs.
-              0.8523)
+              0.8288 with the lung fields erased against 0.8523 on the full image, over the
+              held-out test set of 3,142 radiographs
             </dd>
           </div>
           <div className="rounded-lg border border-neutral-800 p-4">
-            <dt className="text-xs uppercase tracking-wide text-neutral-500">
-              COVID vs. Lung Opacity
+            <dt className="text-xs uppercase tracking-wide text-neutral-400">
+              Pair AUC, lungs erased / full image
             </dt>
             <dd className="mt-1 text-3xl font-semibold tabular-nums text-neutral-200">
               0.9815 / 0.9797
             </dd>
+            {/*
+              Wording is README.md:41 verbatim, deliberately. This previously
+              read "erasing them helps slightly", which reads a DIRECTION off a
+              0.0018 gap with no interval — the exact move this project exists
+              to criticise, and a contradiction of its own source document,
+              which declines to make it.
+            */}
             <dd className="mt-1 text-xs text-neutral-400">
-              pair AUC without lungs / with lungs — on the comparison that matters clinically,
-              erasing them helps slightly
+              COVID vs. Lung Opacity — both adult, both radiographic opacities, the comparison
+              that matters clinically. Erasing the lungs does not hurt: lung parenchyma
+              contributes nothing measurable.
             </dd>
           </div>
         </dl>
 
-        <div className="max-w-3xl space-y-2 text-xs text-neutral-500">
+        {/*
+          neutral-400, not neutral-500. Design section 8 requires the
+          hand-picked nature of the gallery to be stated plainly; at
+          neutral-500 this disclosure rendered at 4.18:1 — below WCAG AA, and
+          under a third of the contrast of the three figures it qualifies.
+        */}
+        <div className="max-w-3xl space-y-2 text-xs text-neutral-400">
           <p>
-            These twelve test-set images were <strong className="text-neutral-400">hand-picked</strong>{' '}
+            These twelve test-set images were <strong className="text-neutral-100">hand-picked</strong>{' '}
             to make that argument. They are not a random sample and nothing here is a measure of
             accuracy — whether the model happens to be right about any one of them is beside the
             point. The accuracy figure it does have on the full test set, 0.852 macro-F1, is the
@@ -176,7 +198,7 @@ export default function Page() {
           </p>
         </div>
       ) : (
-        <p className="text-neutral-500">Loading gallery…</p>
+        <p className="text-neutral-400">Loading gallery…</p>
       )}
     </main>
   )

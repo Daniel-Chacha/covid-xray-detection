@@ -112,169 +112,199 @@ export default function Viewer({ item }: { item: GalleryItem }) {
   const topUnchanged = rawTop === erasedTop
 
   return (
-    <section className="grid gap-8 md:grid-cols-2">
-      <div>
-        <div className="relative aspect-square overflow-hidden rounded-lg bg-black">
-          {/*
-            Displayed FAR larger than 224 CSS pixels, deliberately. tfjs reads an
-            <img>'s layout size, not its intrinsic size, so this is exactly the
-            case lib/infer.ts's offscreen-canvas rasterisation exists to survive.
-            Do not pin the display size — that would hide the bug rather than
-            keep it fixed.
-          */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            ref={imageRef}
-            key={`${item.id}-${variant}`}
-            data-testid="viewer-image"
-            data-variant={variant}
-            src={assetPath(`/gallery/${item.id}/${VARIANT_IMAGE[variant]}`)}
-            alt={`${item.true_class.replace('_', ' ')} radiograph — ${VARIANT_LABEL[variant]}`}
-            width={224}
-            height={224}
-            /*
-              Load-bearing since lib/infer.ts began rasterising through a canvas:
-              a canvas tainted by a non-CORS cross-origin image throws
-              SecurityError on getImageData and kills live inference. Kept, so
-              the requirement is explicit and fails LOUDLY — a host that does not
-              send Access-Control-Allow-Origin breaks the image load itself,
-              which is visible on screen and surfaces through the banner below,
-              rather than producing an image that renders fine and a
-              SecurityError buried inside TF.js. Same-origin (the default deploy)
-              is unaffected. Any CDN assetPrefix MUST send ACAO.
-            */
-            crossOrigin="anonymous"
-            className="h-full w-full object-contain"
-          />
-          {camVisible && (
-            /*
-              Fully opaque on purpose: scripts/build_gallery.py already blends
-              the jet heatmap over the grayscale at alpha=0.45 before saving, so
-              gradcam.png is a finished image, not a transparent layer.
-              z-index deliberately unset — nothing here may cover the z-50
-              disclaimer.
-            */
-            /* eslint-disable-next-line @next/next/no-img-element */
+    // aria-labelledby, not a bare <section>: an unnamed section is not exposed
+    // as a landmark at all, so the viewer was unreachable by landmark
+    // navigation and the page had exactly one heading in it.
+    <section aria-labelledby="viewer-heading" className="space-y-4">
+      <h2
+        id="viewer-heading"
+        className="text-xs font-semibold uppercase tracking-wide text-neutral-400"
+      >
+        Selected radiograph — {item.id}
+      </h2>
+
+      <div className="grid gap-8 md:grid-cols-2">
+        <div>
+          <div className="relative aspect-square overflow-hidden rounded-lg bg-black">
+            {/*
+              Displayed FAR larger than 224 CSS pixels, deliberately. tfjs reads
+              an <img>'s layout size, not its intrinsic size, so this is exactly
+              the case lib/infer.ts's offscreen-canvas rasterisation exists to
+              survive. Do not pin the display size — that would hide the bug
+              rather than keep it fixed.
+            */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              key={`${item.id}-gradcam`}
-              data-testid="gradcam-overlay"
-              src={assetPath(`/gallery/${item.id}/gradcam.png`)}
-              alt="Grad-CAM attribution overlay for the full-image model"
-              className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+              ref={imageRef}
+              key={`${item.id}-${variant}`}
+              data-testid="viewer-image"
+              data-variant={variant}
+              src={assetPath(`/gallery/${item.id}/${VARIANT_IMAGE[variant]}`)}
+              alt={`${item.true_class.replace('_', ' ')} radiograph — ${VARIANT_LABEL[variant]}`}
+              width={224}
+              height={224}
+              /*
+                Load-bearing since lib/infer.ts began rasterising through a
+                canvas: a canvas tainted by a non-CORS cross-origin image throws
+                SecurityError on getImageData and kills live inference. Kept, so
+                the requirement is explicit and fails LOUDLY — a host that does
+                not send Access-Control-Allow-Origin breaks the image load
+                itself, which is visible on screen and surfaces through the
+                banner below, rather than producing an image that renders fine
+                and a SecurityError buried inside TF.js. Same-origin (the
+                default deploy) is unaffected. Any CDN assetPrefix MUST send
+                ACAO.
+              */
+              crossOrigin="anonymous"
+              className="h-full w-full object-contain"
             />
+            {camVisible && (
+              /*
+                Fully opaque on purpose: scripts/build_gallery.py already blends
+                the jet heatmap over the grayscale at alpha=0.45 before saving,
+                so gradcam.png is a finished image, not a transparent layer.
+                z-index deliberately unset — nothing here may cover the z-50
+                disclaimer.
+              */
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                key={`${item.id}-gradcam`}
+                data-testid="gradcam-overlay"
+                src={assetPath(`/gallery/${item.id}/gradcam.png`)}
+                alt="Grad-CAM attribution overlay for the full-image model"
+                className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+              />
+            )}
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            {VARIANTS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => selectVariant(option)}
+                aria-pressed={variant === option}
+                data-testid={`variant-${option}`}
+                className={`rounded px-3 py-1.5 text-sm transition ${
+                  variant === option
+                    ? 'bg-sky-500 text-neutral-950'
+                    : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
+                }`}
+              >
+                {VARIANT_LABEL[option]}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setShowCam((on) => !on)}
+              disabled={variant !== 'raw'}
+              aria-pressed={camVisible}
+              data-testid="toggle-attention"
+              title={
+                variant === 'raw'
+                  ? 'Grad-CAM for the full-image model'
+                  : 'The heatmap belongs to the full-image model; it says nothing about the lungs-erased one'
+              }
+              className="rounded bg-neutral-800 px-3 py-1.5 text-sm text-neutral-300 transition hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-neutral-800"
+            >
+              {camVisible ? 'Hide' : 'Show'} attention
+            </button>
+          </div>
+
+          {/*
+            neutral-400, not neutral-600. This sentence and the one at the foot
+            of the comparison block are the qualifying copy — what the heatmap
+            is, and where the numbers came from — and at neutral-600 they
+            rendered at 2.53:1 and 2.42:1, roughly a THIRD of the contrast of
+            the figures they qualify. Design section 9's failure condition is a
+            reader who leaves thinking "impressive COVID detector"; bright
+            numbers over near-invisible caveats is how that happens.
+          */}
+          <p className="mt-3 text-xs text-neutral-400">
+            {variant === 'raw'
+              ? 'Attention is Grad-CAM from the full-image model, precomputed in Python and blended into the image at 45% opacity.'
+              : 'Every pixel inside the segmented lung fields is set to zero. Whatever the model is reading, it is not in there.'}
+          </p>
+        </div>
+
+        <div className="space-y-6">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-neutral-400">True label</p>
+            <p className="text-lg">{item.true_class.replace('_', ' ')}</p>
+            {item.note && <p className="mt-2 text-sm text-neutral-400">{item.note}</p>}
+            <p className="mt-2 text-sm text-neutral-400">
+              Lung attribution ratio <span className="tabular-nums">{item.lar.toFixed(3)}</span>{' '}
+              {/*
+                No colour of its own, deliberately. LAR is meaningless without
+                its measured floor and ceiling, so the calibration INHERITS the
+                number's colour and cannot drift dimmer than it again.
+              */}
+              <span>(chance 0.238, ceiling 0.376)</span>
+            </p>
+          </div>
+
+          <div
+            data-testid="agreement"
+            className="rounded-lg border border-neutral-800 bg-neutral-900/50 p-4"
+          >
+            <p className="text-xs uppercase tracking-wide text-neutral-400">
+              Full image vs. lungs erased
+            </p>
+            <p className="mt-2 text-sm text-neutral-200">
+              {topUnchanged ? (
+                <>
+                  Erasing the lungs leaves the top answer unchanged:{' '}
+                  <span className="text-neutral-50">{CLASS_NAMES[rawTop].replace('_', ' ')}</span>,{' '}
+                  <span className="tabular-nums">
+                    {(rawProbabilities[rawTop] * 100).toFixed(1)}% →{' '}
+                    {(erasedProbabilities[rawTop] * 100).toFixed(1)}%
+                  </span>
+                  .
+                </>
+              ) : (
+                <>
+                  Erasing the lungs changes the top answer:{' '}
+                  <span className="text-neutral-50">{CLASS_NAMES[rawTop].replace('_', ' ')}</span>{' '}
+                  <span className="tabular-nums">
+                    ({(rawProbabilities[rawTop] * 100).toFixed(1)}%)
+                  </span>{' '}
+                  →{' '}
+                  <span className="text-neutral-50">
+                    {CLASS_NAMES[erasedTop].replace('_', ' ')}
+                  </span>{' '}
+                  <span className="tabular-nums">
+                    ({(erasedProbabilities[erasedTop] * 100).toFixed(1)}%)
+                  </span>
+                  .
+                </>
+              )}
+            </p>
+            <p className="mt-2 text-xs text-neutral-400">
+              {bothMeasured
+                ? 'Both sides measured in this browser.'
+                : 'Both sides from the Python reference — switch to Lungs erased to measure them here.'}
+            </p>
+          </div>
+
+          <Predictions
+            live={live[variant] ?? null}
+            reference={item.reference[variant]}
+            busy={busy}
+            failed={error !== null}
+          />
+
+          {error && (
+            <p
+              data-testid="inference-error"
+              role="status"
+              className="rounded border border-amber-600/40 bg-amber-950/40 px-3 py-2 text-xs text-amber-200"
+            >
+              <strong className="font-semibold">Live inference unavailable.</strong> Showing the
+              reference probabilities computed in Python instead.{' '}
+              <span className="text-amber-200/70">({error})</span>
+            </p>
           )}
         </div>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          {VARIANTS.map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => selectVariant(option)}
-              aria-pressed={variant === option}
-              data-testid={`variant-${option}`}
-              className={`rounded px-3 py-1.5 text-sm transition ${
-                variant === option
-                  ? 'bg-sky-500 text-neutral-950'
-                  : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'
-              }`}
-            >
-              {VARIANT_LABEL[option]}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => setShowCam((on) => !on)}
-            disabled={variant !== 'raw'}
-            aria-pressed={camVisible}
-            data-testid="toggle-attention"
-            title={
-              variant === 'raw'
-                ? 'Grad-CAM for the full-image model'
-                : 'The heatmap belongs to the full-image model; it says nothing about the lungs-erased one'
-            }
-            className="rounded bg-neutral-800 px-3 py-1.5 text-sm text-neutral-300 transition hover:bg-neutral-700 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-neutral-800"
-          >
-            {camVisible ? 'Hide' : 'Show'} attention
-          </button>
-        </div>
-
-        <p className="mt-3 text-xs text-neutral-600">
-          {variant === 'raw'
-            ? 'Attention is Grad-CAM from the full-image model, precomputed in Python and blended into the image at 45% opacity.'
-            : 'Every pixel inside the segmented lung fields is set to zero. Whatever the model is reading, it is not in there.'}
-        </p>
-      </div>
-
-      <div className="space-y-6">
-        <div>
-          <p className="text-xs uppercase tracking-wide text-neutral-500">True label</p>
-          <p className="text-lg">{item.true_class.replace('_', ' ')}</p>
-          {item.note && <p className="mt-2 text-sm text-neutral-400">{item.note}</p>}
-          <p className="mt-2 text-sm text-neutral-400">
-            Lung attribution ratio <span className="tabular-nums">{item.lar.toFixed(3)}</span>{' '}
-            <span className="text-neutral-600">(chance 0.238, ceiling 0.376)</span>
-          </p>
-        </div>
-
-        <div
-          data-testid="agreement"
-          className="rounded-lg border border-neutral-800 bg-neutral-900/50 p-4"
-        >
-          <p className="text-xs uppercase tracking-wide text-neutral-500">
-            Full image vs. lungs erased
-          </p>
-          <p className="mt-2 text-sm text-neutral-200">
-            {topUnchanged ? (
-              <>
-                Erasing the lungs leaves the top answer unchanged:{' '}
-                <span className="text-neutral-50">{CLASS_NAMES[rawTop].replace('_', ' ')}</span>,{' '}
-                <span className="tabular-nums">
-                  {(rawProbabilities[rawTop] * 100).toFixed(1)}% →{' '}
-                  {(erasedProbabilities[rawTop] * 100).toFixed(1)}%
-                </span>
-                .
-              </>
-            ) : (
-              <>
-                Erasing the lungs changes the top answer:{' '}
-                <span className="text-neutral-50">{CLASS_NAMES[rawTop].replace('_', ' ')}</span>{' '}
-                <span className="tabular-nums">
-                  ({(rawProbabilities[rawTop] * 100).toFixed(1)}%)
-                </span>{' '}
-                → <span className="text-neutral-50">{CLASS_NAMES[erasedTop].replace('_', ' ')}</span>{' '}
-                <span className="tabular-nums">
-                  ({(erasedProbabilities[erasedTop] * 100).toFixed(1)}%)
-                </span>
-                .
-              </>
-            )}
-          </p>
-          <p className="mt-2 text-xs text-neutral-600">
-            {bothMeasured
-              ? 'Both sides measured in this browser.'
-              : 'Both sides from the Python reference — switch to Lungs erased to measure them here.'}
-          </p>
-        </div>
-
-        <Predictions
-          live={live[variant] ?? null}
-          reference={item.reference[variant]}
-          busy={busy}
-          failed={error !== null}
-        />
-
-        {error && (
-          <p
-            data-testid="inference-error"
-            role="status"
-            className="rounded border border-amber-600/40 bg-amber-950/40 px-3 py-2 text-xs text-amber-200"
-          >
-            <strong className="font-semibold">Live inference unavailable.</strong> Showing the
-            reference probabilities computed in Python instead.{' '}
-            <span className="text-amber-200/70">({error})</span>
-          </p>
-        )}
       </div>
     </section>
   )

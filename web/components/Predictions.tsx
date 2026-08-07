@@ -48,7 +48,7 @@ export default function Predictions({ live, reference, busy, failed }: Props) {
         {live && (
           <span
             data-testid="parity-delta"
-            className="tabular-nums text-neutral-500"
+            className="tabular-nums text-neutral-400"
             title="Largest per-class difference between this browser's output and the Python reference in manifest.json"
           >
             parity Δ {maxDelta(live, reference).toExponential(1)}
