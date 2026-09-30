@@ -12,6 +12,8 @@ import { CLASS_NAMES } from '@/lib/types'
  * Gallery, which only needs a URL, deliberately imports from `@/lib/paths`.
  */
 interface Props {
+  /** Which model produced these numbers — a VARIANT_LABEL, e.g. "Full image". */
+  model: string
   /** Probabilities measured in this browser, or null if none yet. */
   live: number[] | null
   /** The manifest's Keras probabilities for the same image and variant. */
@@ -37,12 +39,31 @@ function sourceLabel(live: number[] | null, busy: boolean, failed: boolean): str
   return 'Python reference'
 }
 
-export default function Predictions({ live, reference, busy, failed }: Props) {
+export default function Predictions({ model, live, reference, busy, failed }: Props) {
   const shown = live ?? reference
   const top = argmax(shown)
 
   return (
     <div className="space-y-3">
+      {/*
+        The model's answer, set in the same form as the "True label" block
+        above so the two read as a pair. It names the model because the variant
+        toggle swaps which network these bars belong to, and it is derived from
+        `shown`, so it always agrees with the highlighted bar — whether that
+        came from this browser or from the Python reference.
+      */}
+      <div data-testid="predicted-label">
+        <p className="text-xs uppercase tracking-wide text-neutral-400">
+          Model prediction — {model} model
+        </p>
+        <p className="text-lg">
+          {CLASS_NAMES[top].replace('_', ' ')}{' '}
+          <span className="tabular-nums text-neutral-400">
+            {(shown[top] * 100).toFixed(1)}%
+          </span>
+        </p>
+      </div>
+
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-xs text-neutral-400">
         <span data-testid="prediction-source">{sourceLabel(live, busy, failed)}</span>
         {live && (

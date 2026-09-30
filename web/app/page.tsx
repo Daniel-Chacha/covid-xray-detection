@@ -3,8 +3,6 @@
 import { useEffect, useState } from 'react'
 import Gallery from '@/components/Gallery'
 import Viewer from '@/components/Viewer'
-import { argmax } from '@/lib/infer'
-import { activeBackend } from '@/lib/model'
 import { assetPath } from '@/lib/paths'
 import type { GalleryItem } from '@/lib/types'
 
@@ -36,7 +34,6 @@ function parseManifest(payload: unknown): GalleryItem[] {
 export default function Page() {
   const [items, setItems] = useState<GalleryItem[]>([])
   const [selectedId, setSelectedId] = useState<string>('')
-  const [backend, setBackend] = useState<string>('')
   const [manifestError, setManifestError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -63,15 +60,6 @@ export default function Page() {
         setManifestError(cause instanceof Error ? cause.message : String(cause))
       })
 
-    activeBackend().then(
-      (name) => {
-        if (!cancelled) setBackend(name)
-      },
-      () => {
-        if (!cancelled) setBackend('unavailable')
-      },
-    )
-
     return () => {
       cancelled = true
     }
@@ -79,99 +67,15 @@ export default function Page() {
 
   const selected = items.find((item) => item.id === selectedId)
 
-  // The prominent number, per design section 8: agreement between the two
-  // models, not accuracy. Counted from the manifest rather than hardcoded, so
-  // it cannot drift away from the images actually shipped.
-  const unchanged = items.filter(
-    (item) => argmax(item.reference.raw) === argmax(item.reference.lungs_removed),
-  ).length
-
   return (
     <main className="mx-auto w-full max-w-5xl space-y-10 px-4 py-10">
-      <header className="space-y-5">
-        <h1 className="text-3xl font-semibold tracking-tight">
-          How much of this COVID classifier is real?
-        </h1>
-        <p className="max-w-2xl text-neutral-300">
-          Two DenseNet121 models run in your browser on the same radiograph — one trained on the
-          full image, one trained with the lung fields erased to black. Toggle between them. The
-          prediction mostly does not move, because the classifier is reading how the image was
-          acquired rather than what is inside the chest.
-        </p>
-
-        <dl className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-lg border border-sky-400/30 bg-sky-950/20 p-4">
-            <dt className="text-xs uppercase tracking-wide text-sky-200/70">
-              The two models agree
-            </dt>
-            <dd className="mt-1 text-3xl font-semibold tabular-nums text-sky-200">
-              {items.length > 0 ? `${unchanged} of ${items.length}` : '—'}
-            </dd>
-            <dd className="mt-1 text-xs text-neutral-400">
-              images below where erasing the lungs entirely leaves the top answer unchanged
-            </dd>
-          </div>
-          {/*
-            The <dt> names the MEASURED QUANTITY, not the dataset. It read
-            "Held-out test set, 3,142 images" over a 97.2% in 30px type, so a
-            skim produced "97.2% on 3,142 held-out images" — an accuracy
-            headline, and precisely the misreading design section 9 warns
-            about. The number is a retention ratio and now says so before the
-            eye reaches it.
-          */}
-          <div className="rounded-lg border border-neutral-800 p-4">
-            <dt className="text-xs uppercase tracking-wide text-neutral-400">
-              Macro-F1 retained without lungs
-            </dt>
-            <dd className="mt-1 text-3xl font-semibold tabular-nums text-neutral-200">97.2%</dd>
-            <dd className="mt-1 text-xs text-neutral-400">
-              0.8288 with the lung fields erased against 0.8523 on the full image, over the
-              held-out test set of 3,142 radiographs
-            </dd>
-          </div>
-          <div className="rounded-lg border border-neutral-800 p-4">
-            <dt className="text-xs uppercase tracking-wide text-neutral-400">
-              Pair AUC, lungs erased / full image
-            </dt>
-            <dd className="mt-1 text-3xl font-semibold tabular-nums text-neutral-200">
-              0.9815 / 0.9797
-            </dd>
-            {/*
-              Wording is README.md:41 verbatim, deliberately. This previously
-              read "erasing them helps slightly", which reads a DIRECTION off a
-              0.0018 gap with no interval — the exact move this project exists
-              to criticise, and a contradiction of its own source document,
-              which declines to make it.
-            */}
-            <dd className="mt-1 text-xs text-neutral-400">
-              COVID vs. Lung Opacity — both adult, both radiographic opacities, the comparison
-              that matters clinically. Erasing the lungs does not hurt: lung parenchyma
-              contributes nothing measurable.
-            </dd>
-          </div>
-        </dl>
-
-        {/*
-          neutral-400, not neutral-500. Design section 8 requires the
-          hand-picked nature of the gallery to be stated plainly; at
-          neutral-500 this disclosure rendered at 4.18:1 — below WCAG AA, and
-          under a third of the contrast of the three figures it qualifies.
-        */}
-        <div className="max-w-3xl space-y-2 text-xs text-neutral-400">
-          <p>
-            These twelve test-set images were <strong className="text-neutral-100">hand-picked</strong>{' '}
-            to make that argument. They are not a random sample and nothing here is a measure of
-            accuracy — whether the model happens to be right about any one of them is beside the
-            point. The accuracy figure it does have on the full test set, 0.852 macro-F1, is the
-            artefact under examination, not a result to be impressed by.
-          </p>
-          <p>
-            Nothing is uploaded, and there is nothing to upload with: the twelve radiographs ship
-            with the page and both models run entirely on your device
-            {backend && ` (TensorFlow.js, ${backend} backend)`}.
-          </p>
-        </div>
-      </header>
+      {/*
+        Every word of explanation — the headline figures, the training recipe,
+        the data caveats — lives on /about. The heading stays for screen-reader
+        and landmark navigation only; the hand-picked disclosure design section
+        8 requires is still visible, in the gallery's own heading.
+      */}
+      <h1 className="sr-only">How much of this COVID classifier is real?</h1>
 
       {items.length > 0 && (
         <Gallery items={items} selectedId={selectedId} onSelect={setSelectedId} />

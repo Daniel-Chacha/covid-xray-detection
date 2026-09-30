@@ -287,6 +287,7 @@ export default function Viewer({ item }: { item: GalleryItem }) {
           </div>
 
           <Predictions
+            model={VARIANT_LABEL[variant]}
             live={live[variant] ?? null}
             reference={item.reference[variant]}
             busy={busy}
